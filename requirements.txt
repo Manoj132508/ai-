@@ -1,0 +1,13 @@
+# Python HTTP service
+fastapi
+uvicorn[standard]
+
+# Environment-based configuration
+pydantic-settings
+python-dotenv
+
+# RAG storage and document parsing
+chromadb
+pypdf
+
+# Add the chosen LLM/embedding provider's official SDK in Phase 5.
