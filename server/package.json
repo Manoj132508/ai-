@@ -1,0 +1,15 @@
+{
+  "name": "ai-knowledge-assistant-server",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Express API: authentication, tenancy, file storage and orchestration of the Python AI service.",
+  "scripts": {
+    "dev": "node --watch --env-file=.env server.js",
+    "start": "node --env-file=.env server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2"
+  }
+}
