@@ -47,6 +47,19 @@ export const ERROR_CODES = Object.freeze({
     status: 429,
     message: 'Too many requests. Please wait a moment and try again.',
   },
+  // 409, not 400: the request is valid, it conflicts with existing state.
+  EMAIL_TAKEN: {
+    status: 409,
+    message: 'An account with that email already exists.',
+  },
+  // 403, not 401: the caller IS authenticated. What failed is proof that this
+  // particular request was intended, which is a different question from who
+  // they are. Returning 401 would make a client try to re-authenticate, which
+  // cannot fix a missing CSRF token.
+  CSRF_INVALID: {
+    status: 403,
+    message: 'This request could not be verified. Please refresh and try again.',
+  },
 
   // --- Resources ------------------------------------------------------
   // 404 rather than 403 for another user's resource, so the API never

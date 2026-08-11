@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import App from './App.jsx';
+import { AuthProvider } from './context/AuthContext.jsx';
 
 // Import order matters: Bootstrap first, then our tokens, then our global
 // rules. Later stylesheets win on equal specificity, so this is what lets the
@@ -18,7 +19,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <BrowserRouter
       future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
     >
-      <App />
+      {/* Inside the router, because RequireAuth and the login redirect both
+          need routing context. */}
+      <AuthProvider>
+        <App />
+      </AuthProvider>
     </BrowserRouter>
   </React.StrictMode>,
 );

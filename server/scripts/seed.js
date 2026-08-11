@@ -21,6 +21,7 @@
  */
 import mongoose from 'mongoose';
 import { connectDatabase, disconnectDatabase } from '../config/db.js';
+import { hashPassword } from '../utils/password.js';
 import {
   User,
   KnowledgeBase,
@@ -30,24 +31,38 @@ import {
 } from '../models/index.js';
 
 const RESET = process.argv.includes('--reset');
-const SEED_EMAIL = 'demo@example.test'; // .test is reserved by RFC 2606
+
+// .test is reserved by RFC 2606, so these can never collide with a real domain.
+const SEED_EMAIL = 'demo@example.test';
+const SEED_PASSWORD = 'demo-password-123';
 
 /*
- * Authentication does not exist until phase 8, so there is no hashing
- * available here. This is a deliberate placeholder, not a hash: bcrypt.compare
- * returns false for any input against a string that is not a valid bcrypt
- * digest, so the seeded account cannot be logged into even by accident.
- * Phase 8's seed will hash a real development password.
+ * A SECOND user, owning nothing the first can see.
+ *
+ * This exists so cross-tenant isolation can be tested against real data
+ * rather than a fabricated ObjectId. A test that asks for a *nonexistent* id
+ * gets a 404 whether or not tenancy works; only a request for a real resource
+ * belonging to someone else proves anything.
  */
-const PLACEHOLDER_HASH = 'PHASE8-PLACEHOLDER-NOT-A-VALID-BCRYPT-HASH';
+const OTHER_EMAIL = 'other@example.test';
+const OTHER_PASSWORD = 'other-password-123';
 
-async function upsert(Model, naturalKey, insertOnly) {
-  const doc = await Model.findOneAndUpdate(
-    naturalKey,
-    { $setOnInsert: { ...naturalKey, ...insertOnly } },
-    { upsert: true, new: true, setDefaultsOnInsert: true },
-  );
-  return doc;
+/**
+ * @param insertOnly  written only when the document is created, so re-running
+ *                    never clobbers edits made while developing
+ * @param always      written on every run — used for the password hash, so the
+ *                    documented seed credentials always work even after the
+ *                    hashing scheme changes between phases
+ */
+async function upsert(Model, naturalKey, insertOnly, always = {}) {
+  const update = { $setOnInsert: { ...naturalKey, ...insertOnly } };
+  if (Object.keys(always).length > 0) update.$set = always;
+
+  return Model.findOneAndUpdate(naturalKey, update, {
+    upsert: true,
+    new: true,
+    setDefaultsOnInsert: true,
+  });
 }
 
 async function reset(userId) {
@@ -76,10 +91,29 @@ async function seed() {
   const user = await upsert(
     User,
     { email: SEED_EMAIL },
-    { name: 'Demo User', passwordHash: PLACEHOLDER_HASH },
+    { name: 'Demo User' },
+    { passwordHash: await hashPassword(SEED_PASSWORD) },
   );
 
-  if (RESET) await reset(user._id);
+  const other = await upsert(
+    User,
+    { email: OTHER_EMAIL },
+    { name: 'Other User' },
+    { passwordHash: await hashPassword(OTHER_PASSWORD) },
+  );
+
+  if (RESET) {
+    await reset(user._id);
+    await reset(other._id);
+  }
+
+  // The other tenant's data. The demo user must never be able to read this,
+  // and the cross-tenant test asserts exactly that.
+  await upsert(
+    KnowledgeBase,
+    { userId: other._id, name: 'Other Tenant Private KB' },
+    { description: 'Belongs to other@example.test. Demo user must get a 404.' },
+  );
 
   // --- knowledge bases ------------------------------------------------
   const hr = await upsert(
@@ -267,7 +301,8 @@ async function seed() {
   };
 
   console.log(`\nSeeded database "${mongoose.connection.name}"`);
-  console.log(`  demo user: ${SEED_EMAIL} (cannot log in until phase 8)`);
+  console.log(`  demo user:  ${SEED_EMAIL} / ${SEED_PASSWORD}`);
+  console.log(`  other user: ${OTHER_EMAIL} / ${OTHER_PASSWORD}  (owns a private KB)`);
   for (const [key, value] of Object.entries(counts)) {
     console.log(`  ${key.padEnd(16)} ${value}`);
   }

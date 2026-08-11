@@ -1,0 +1,51 @@
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-bottom: var(--space-3);
+}
+
+.label {
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.input {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: var(--font-size-base);
+  color: var(--color-text);
+  background: var(--color-bg);
+  transition: border-color 0.15s ease;
+}
+
+.input:hover:not(:disabled) {
+  border-color: var(--color-muted);
+}
+
+.input:disabled {
+  background: var(--color-surface);
+  cursor: not-allowed;
+}
+
+.inputError {
+  border-color: var(--status-failed);
+}
+
+.hint {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
+}
+
+/* Colour is not the only signal: the message itself carries the meaning, and
+   aria-invalid carries it to assistive technology. */
+.error {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--status-failed);
+}

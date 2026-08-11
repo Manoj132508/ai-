@@ -31,6 +31,32 @@ function requiredInProduction(name, devFallback) {
   return devFallback;
 }
 
+/**
+ * Required in EVERY environment, with no fallback.
+ *
+ * A development default for a signing secret is how a placeholder reaches
+ * production: it works locally, nobody notices it is unset on the server, and
+ * the deploy succeeds with a secret that is public in the repository. Anyone
+ * who has read the source can then mint valid sessions for any account.
+ *
+ * Refusing to boot without it is the only version of this that cannot be
+ * forgotten.
+ */
+function required(name, hint) {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`Missing required environment variable ${name}. ${hint}`);
+  }
+  return value;
+}
+
+function parseDurationMs(value) {
+  const match = /^(\d+)([smhd])$/.exec(value);
+  if (!match) throw new Error(`JWT_EXPIRES_IN must look like "15m", "7d"; got "${value}"`);
+  const units = { s: 1e3, m: 6e4, h: 3.6e6, d: 8.64e7 };
+  return Number(match[1]) * units[match[2]];
+}
+
 const port = Number(process.env.PORT ?? 4200);
 if (!Number.isInteger(port) || port <= 0 || port > 65535) {
   throw new Error(`PORT must be a valid port number, received "${process.env.PORT}"`);
@@ -58,4 +84,15 @@ export const config = Object.freeze({
     'MONGODB_URI',
     'mongodb://127.0.0.1:27017/ai_knowledge_assistant',
   ),
+
+  jwtSecret: required(
+    'JWT_SECRET',
+    'Generate one with: node -e "console.log(require(\'crypto\').randomBytes(48).toString(\'base64url\'))"',
+  ),
+
+  // Short by design. A JWT cannot be revoked — verification is a signature
+  // check with no database lookup — so the expiry is the only bound on how
+  // long a stolen token stays useful.
+  jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? '2h',
+  jwtExpiresMs: parseDurationMs(process.env.JWT_EXPIRES_IN ?? '2h'),
 });

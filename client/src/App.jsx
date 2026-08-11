@@ -9,6 +9,7 @@ import DashboardPage from './pages/DashboardPage.jsx';
 import KnowledgeBasePage from './pages/KnowledgeBasePage.jsx';
 import NotFoundPage from './pages/NotFoundPage.jsx';
 import ComponentGalleryPage from './pages/ComponentGalleryPage.jsx';
+import RequireAuth from './components/RequireAuth.jsx';
 
 /*
  * Route table -- Phase 4, section 4.1.
@@ -32,8 +33,21 @@ export default function App() {
         <Route path="/register" element={<RegisterPage />} />
       </Route>
 
-      {/* Authenticated shell. Phase 8: wrap this element in <RequireAuth>. */}
-      <Route element={<AppLayout />}>
+      {/*
+        Authenticated shell.
+        <RequireAuth> wraps the LAYOUT, so every child route below inherits the
+        guard. Adding a new authenticated page needs no auth wiring at all --
+        the impossible-to-forget version of the rule. Note this protects
+        NAVIGATION only; the real boundary is requireAuth on the server plus
+        ownership-scoped queries.
+      */}
+      <Route
+        element={
+          <RequireAuth>
+            <AppLayout />
+          </RequireAuth>
+        }
+      >
         <Route path="/" element={<DashboardPage />} />
 
         {/* Chat is the default view for a knowledge base: the product's value

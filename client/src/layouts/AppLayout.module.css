@@ -40,8 +40,18 @@
 
 .headerRight {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   color: var(--color-muted);
   font-size: var(--font-size-sm);
+}
+
+.user {
+  max-width: 22ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .drawerToggle {

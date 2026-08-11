@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Outlet, useLocation, NavLink } from 'react-router-dom';
+import { Outlet, useLocation, NavLink, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext.jsx';
+import Button from '../components/primitives/Button.jsx';
 import styles from './AppLayout.module.css';
 
 /**
@@ -13,7 +15,16 @@ import styles from './AppLayout.module.css';
  */
 export default function AppLayout() {
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
+
+  async function handleLogout() {
+    setLoggingOut(true);
+    await logout(); // never rejects: it clears local state in a finally block
+    navigate('/login', { replace: true });
+  }
 
   // Close the drawer whenever the route changes: on mobile the user taps a
   // link inside the drawer, and leaving it open would cover the page they
@@ -59,8 +70,15 @@ export default function AppLayout() {
         <span className={styles.brand}>AI Knowledge Assistant</span>
 
         <div className={styles.headerRight}>
-          {/* Replaced by the real user menu in Phase 8. */}
-          <span className={styles.user}>manoj</span>
+          <span className={styles.user}>{user?.name ?? user?.email}</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleLogout}
+            loading={loggingOut}
+          >
+            Log out
+          </Button>
         </div>
       </header>
 

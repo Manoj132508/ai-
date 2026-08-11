@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 
 import { config } from './config/env.js';
 import { requestId } from './middleware/requestId.js';
@@ -69,15 +70,21 @@ export function createApp() {
   app.use(express.json({ limit: '100kb' }));
   app.use(express.urlencoded({ extended: true, limit: '100kb' }));
 
-  // 6. ROUTES.
+  // 6. COOKIE PARSING -- before routes, because requireAuth and the CSRF
+  //    check both read req.cookies. Without this they see `undefined` and
+  //    every authenticated request 401s, which looks exactly like a broken
+  //    token rather than missing middleware.
+  app.use(cookieParser());
+
+  // 7. ROUTES.
   app.use('/api', routes);
 
-  // 7. NOT FOUND -- after every route.
+  // 8. NOT FOUND -- after every route.
   //    Only reached when nothing above matched. Mounted earlier it would
   //    intercept legitimate requests.
   app.use(notFound);
 
-  // 8. ERROR HANDLER -- last, always.
+  // 9. ERROR HANDLER -- last, always.
   //    Express only sends errors to handlers registered *after* the code that
   //    threw. Mounted before the routes it would never receive anything, and
   //    failures would fall through to Express's default HTML error page.
