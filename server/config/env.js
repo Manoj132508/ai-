@@ -95,4 +95,10 @@ export const config = Object.freeze({
   // long a stolen token stays useful.
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? '2h',
   jwtExpiresMs: parseDurationMs(process.env.JWT_EXPIRES_IN ?? '2h'),
+
+  // Local disk in development; phase 14 swaps this for S3. Relative paths are
+  // resolved against the server directory, not the shell's cwd, so `npm run
+  // dev` from anywhere behaves the same.
+  uploadDir: process.env.UPLOAD_DIR ?? 'uploads',
+  maxUploadBytes: Number(process.env.MAX_UPLOAD_BYTES ?? 10 * 1024 * 1024),
 });

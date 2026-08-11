@@ -7,6 +7,7 @@ import healthRoutes from './health.routes.js';
 import devRoutes from './dev.routes.js';
 import authRoutes from './auth.routes.js';
 import knowledgeBaseRoutes from './knowledgeBase.routes.js';
+import documentRoutes from './document.routes.js';
 
 const router = Router();
 
@@ -28,6 +29,7 @@ router.use('/auth', authRoutes);
  * costs nothing on reads.
  */
 router.use('/knowledge-bases', requireAuth, requireCsrfToken, knowledgeBaseRoutes);
+router.use('/documents', requireAuth, requireCsrfToken, documentRoutes);
 
 // --- development only ---------------------------------------------------
 if (!config.isProduction) {

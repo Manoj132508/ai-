@@ -37,6 +37,17 @@ function normaliseKnownError(err) {
     return new ApiError('PAYLOAD_TOO_LARGE');
   }
 
+  // multer signals limit violations with its own MulterError codes. Without
+  // translation an oversized upload is a 500 — telling the user we broke,
+  // when in fact we correctly refused a file that was too big.
+  if (err?.name === 'MulterError') {
+    if (err.code === 'LIMIT_FILE_SIZE') return new ApiError('FILE_TOO_LARGE');
+    if (err.code === 'LIMIT_FILE_COUNT' || err.code === 'LIMIT_UNEXPECTED_FILE') {
+      return new ApiError('VALIDATION_ERROR', 'Upload one file at a time, in the "file" field.');
+    }
+    return new ApiError('VALIDATION_ERROR', 'That upload could not be processed.');
+  }
+
   return err;
 }
 

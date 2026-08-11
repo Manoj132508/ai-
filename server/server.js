@@ -1,6 +1,7 @@
 import { createApp } from './app.js';
 import { config } from './config/env.js';
 import { connectDatabase, disconnectDatabase } from './config/db.js';
+import { ensureUploadDir } from './services/fileStorage.js';
 import { logger } from './utils/logger.js';
 import './models/index.js'; // register every schema before the first request
 
@@ -16,6 +17,11 @@ let server;
  * at boot, where it belongs.
  */
 async function start() {
+  // Before listening: an upload arriving against a missing directory fails
+  // with an opaque ENOENT from deep inside multer, which reads like a bug in
+  // the upload code rather than a missing folder.
+  await ensureUploadDir();
+
   try {
     await connectDatabase();
   } catch (err) {
