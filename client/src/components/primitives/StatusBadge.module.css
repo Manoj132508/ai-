@@ -1,0 +1,29 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  border-radius: 999px;
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  border: 1px solid currentColor;
+  background: var(--color-bg);
+}
+
+.glyph {
+  font-size: 10px;
+  line-height: 1;
+}
+
+.uploaded {
+  color: var(--status-uploaded);
+}
+.processing {
+  color: var(--status-processing);
+}
+.indexed {
+  color: var(--status-indexed);
+}
+.failed {
+  color: var(--status-failed);
+}

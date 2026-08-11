@@ -1,0 +1,48 @@
+.spinner {
+  display: inline-block;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  animation: spin 0.65s linear infinite;
+  vertical-align: -0.125em;
+}
+
+.sm {
+  width: 12px;
+  height: 12px;
+}
+.md {
+  width: 16px;
+  height: 16px;
+}
+.lg {
+  width: 28px;
+  height: 28px;
+  border-width: 3px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* global.css already reduces animation duration under prefers-reduced-motion,
+   which would freeze the spinner mid-rotation. Replace the spin with a pulse
+   so it still reads as "working". */
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: pulse 1.2s ease-in-out infinite !important;
+    animation-duration: 1.2s !important;
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}

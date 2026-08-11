@@ -1,0 +1,155 @@
+.shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Skip link: off-screen until it receives focus, then pinned top-left.
+   Never `display: none` -- that would remove it from the tab order entirely
+   and defeat the purpose. */
+.skipLink {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-accent);
+  color: #fff;
+  border-radius: 0 0 var(--radius) 0;
+  text-decoration: none;
+}
+
+.skipLink:focus {
+  left: 0;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: var(--header-height);
+  padding: 0 var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg);
+  flex-shrink: 0;
+}
+
+.brand {
+  font-weight: 600;
+}
+
+.headerRight {
+  margin-left: auto;
+  color: var(--color-muted);
+  font-size: var(--font-size-sm);
+}
+
+.drawerToggle {
+  display: none; /* desktop: the sidebar is always visible */
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: var(--space-1) var(--space-2);
+  cursor: pointer;
+  font-size: var(--font-size-lg);
+  line-height: 1;
+}
+
+.body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.sidebar {
+  width: var(--sidebar-width);
+  flex-shrink: 0;
+  border-right: 1px solid var(--color-border);
+  background: var(--color-surface);
+  padding: var(--space-3);
+  overflow-y: auto;
+}
+
+.navItem {
+  display: block;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius);
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.navItem:hover {
+  background: var(--color-surface-alt);
+}
+
+.navItemActive {
+  background: var(--color-accent-subtle);
+  color: var(--color-accent);
+  font-weight: 500;
+}
+
+.sidebarNote {
+  margin: var(--space-3) var(--space-3) 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
+}
+
+.main {
+  flex: 1;
+  min-width: 0; /* lets long content shrink instead of overflowing the flex row */
+  padding: var(--space-4);
+  overflow-y: auto;
+}
+
+.main:focus {
+  outline: none; /* focused only programmatically via the skip link */
+}
+
+.backdrop {
+  display: none;
+}
+
+/* ---- Mobile: sidebar becomes an off-canvas drawer ---- */
+@media (max-width: 767px) {
+  .drawerToggle {
+    display: block;
+  }
+
+  .sidebar {
+    position: fixed;
+    top: var(--header-height);
+    bottom: 0;
+    left: 0;
+    z-index: 20;
+    transform: translateX(-100%);
+
+    /*
+     * `visibility: hidden` -- not `opacity: 0`, and not just the transform.
+     *
+     * A translated-off-screen element is still focusable and still read by a
+     * screen reader, so a keyboard user would tab into an invisible menu.
+     * `visibility: hidden` removes it from both the tab order and the
+     * accessibility tree, and unlike `display: none` it can still transition.
+     */
+    visibility: hidden;
+    transition:
+      transform 0.2s ease,
+      visibility 0s linear 0.2s;
+  }
+
+  .sidebarOpen {
+    transform: translateX(0);
+    visibility: visible;
+    transition:
+      transform 0.2s ease,
+      visibility 0s;
+  }
+
+  .backdrop {
+    display: block;
+    position: fixed;
+    inset: var(--header-height) 0 0 0;
+    z-index: 10;
+    background: rgba(0, 0, 0, 0.35);
+  }
+}

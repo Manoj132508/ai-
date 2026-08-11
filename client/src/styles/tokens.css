@@ -1,0 +1,54 @@
+/*
+ * Design tokens (Phase 4, section 4.5).
+ *
+ * Every colour, space and radius in the app resolves to a variable here.
+ * Components never hard-code a hex value, so a theme change is a change to
+ * this file alone -- and dark mode later becomes a second :root block rather
+ * than a hunt through every stylesheet.
+ */
+:root {
+  /* Surfaces and text */
+  --color-bg: #ffffff;
+  --color-surface: #f8f9fa;
+  --color-surface-alt: #f1f3f5;
+  --color-border: #dee2e6;
+  --color-text: #212529;
+  --color-muted: #6c757d;
+
+  /* Accent */
+  --color-accent: #2563eb;
+  --color-accent-hover: #1d4ed8;
+  --color-accent-subtle: #eff6ff;
+
+  /* Document status -- mirrors Document.status in the Mongo schema */
+  --status-indexed: #16a34a;
+  --status-processing: #ca8a04;
+  --status-failed: #dc2626;
+  --status-uploaded: #6c757d;
+
+  /* Spacing scale. Constrained on purpose: a fixed set of steps keeps
+     rhythm consistent and removes per-component guesswork. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 16px;
+  --space-4: 24px;
+  --space-5: 32px;
+  --space-6: 48px;
+
+  --radius: 8px;
+  --radius-lg: 12px;
+
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-size-sm: 13px;
+  --font-size-base: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 20px;
+  --line-height: 1.6;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+
+  /* Layout */
+  --sidebar-width: 260px;
+  --header-height: 56px;
+}
