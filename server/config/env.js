@@ -50,4 +50,12 @@ export const config = Object.freeze({
 
   aiServiceUrl: process.env.AI_SERVICE_URL ?? 'http://127.0.0.1:8000',
   internalApiKey: requiredInProduction('INTERNAL_API_KEY', 'dev-internal-key-change-me'),
+
+  // No production default: an Atlas URI carries credentials, so a fallback
+  // would either be a placeholder that fails confusingly or a real secret in
+  // source. Required in production, loopback in development.
+  mongodbUri: requiredInProduction(
+    'MONGODB_URI',
+    'mongodb://127.0.0.1:27017/ai_knowledge_assistant',
+  ),
 });

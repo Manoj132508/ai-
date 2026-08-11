@@ -1,26 +1,29 @@
 import { ok } from '../utils/respond.js';
 import { config } from '../config/env.js';
+import { pingDatabase } from '../config/db.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
 
 const startedAt = Date.now();
 
 /**
- * Liveness and dependency check.
+ * Liveness and per-dependency health.
  *
- * Phase 6 has no dependencies to check yet, so `checks` reports only the
- * process. Phase 7 adds MongoDB and Phase 10 the AI service, each as its own
- * entry with its own status -- deliberately, so a partial outage is visible
- * as a partial outage. A single boolean "healthy" would report the whole API
- * as down when only document indexing is affected.
+ * Each dependency reports separately, on purpose: a single boolean would mark
+ * the whole API as down when only one subsystem is affected. Overall status is
+ * `ok` when everything passes and `degraded` otherwise.
  *
- * Overall status is `ok` when everything passes and `degraded` otherwise. The
- * endpoint still answers 200 while degraded: it is reporting successfully,
- * and a load balancer removing the instance for a Chroma blip would take down
- * login and browsing too.
+ * The endpoint answers **200 even when degraded**. It is reporting
+ * successfully -- the report is simply bad news. Returning 503 would make a
+ * load balancer pull the instance out of rotation over a Mongo blip, taking
+ * down browsing and login too. A caller that wants to alert reads
+ * `data.status`, not the HTTP code.
  */
-export function getHealth(req, res) {
+export const getHealth = asyncHandler(async (req, res) => {
+  const mongo = await pingDatabase();
+
   const checks = {
     api: { status: 'ok' },
-    // mongo:     added in phase 7
+    mongo,
     // aiService: added in phase 10
   };
 
@@ -33,4 +36,4 @@ export function getHealth(req, res) {
     requestId: req.id,
     checks,
   });
-}
+});
