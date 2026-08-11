@@ -22,6 +22,7 @@
 import mongoose from 'mongoose';
 import { connectDatabase, disconnectDatabase } from '../config/db.js';
 import { hashPassword } from '../utils/password.js';
+import { deleteStoredFile } from '../services/fileStorage.js';
 import {
   User,
   KnowledgeBase,
@@ -71,6 +72,22 @@ async function reset(userId) {
   const kbs = await KnowledgeBase.find({ userId }).select('_id');
   const kbIds = kbs.map((kb) => kb._id);
   const convos = await Conversation.find({ knowledgeBaseId: { $in: kbIds } }).select('_id');
+
+  /*
+   * Delete the FILES before the rows.
+   *
+   * Same ordering rule as ADR 006, and the same reason: once the rows are
+   * gone nothing points at the files any more, so they become orphans that
+   * only a manual sweep will ever find. Resetting a few times a day would
+   * quietly fill the upload directory with documents no longer in any
+   * database.
+   */
+  const docs = await Document.find({ knowledgeBaseId: { $in: kbIds } }).select('storedPath');
+  for (const doc of docs) {
+    // Seed fixtures use fabricated storedPaths with no file behind them;
+    // deleteStoredFile tolerates that and returns false.
+    await deleteStoredFile(doc.storedPath);
+  }
 
   const results = await Promise.all([
     Message.deleteMany({ conversationId: { $in: convos.map((c) => c._id) } }),

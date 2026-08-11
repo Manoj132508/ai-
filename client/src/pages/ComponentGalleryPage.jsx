@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import Button from '../components/primitives/Button.jsx';
 import Spinner from '../components/primitives/Spinner.jsx';
-import { Skeleton, SkeletonGroup } from '../components/primitives/Skeleton.jsx';
+import { Skeleton, SkeletonGroup, LiveStatus } from '../components/primitives/Skeleton.jsx';
 import EmptyState from '../components/primitives/EmptyState.jsx';
 import ErrorState from '../components/primitives/ErrorState.jsx';
 import StatusBadge from '../components/primitives/StatusBadge.jsx';
@@ -83,11 +83,14 @@ export default function ComponentGalleryPage() {
 
       <Section title="Skeleton">
         <div style={{ width: 260 }}>
-          <SkeletonGroup label="Loading documents">
+          {/* Busy region and live announcement are separate elements -- see
+              the note in Skeleton.jsx for why they were split. */}
+          <SkeletonGroup busy>
             <Skeleton variant="text" width="70%" />
             <Skeleton variant="text" />
             <Skeleton variant="text" width="40%" />
           </SkeletonGroup>
+          <LiveStatus>Loading documents</LiveStatus>
         </div>
         <Skeleton variant="rect" width={180} />
         <Skeleton variant="circle" />

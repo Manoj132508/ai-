@@ -1,0 +1,68 @@
+.zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  width: 100%;
+  padding: var(--space-5) var(--space-4);
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  cursor: pointer;
+  font-family: inherit;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.zone:hover:not(:disabled) {
+  border-color: var(--color-accent);
+  background: var(--color-accent-subtle);
+}
+
+.zone:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.dragging {
+  border-color: var(--color-accent);
+  background: var(--color-accent-subtle);
+}
+
+.icon {
+  font-size: 22px;
+  line-height: 1;
+  color: var(--color-accent);
+}
+
+.primary {
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.secondary {
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
+}
+
+/* Visually hidden but still focusable and present in the accessibility tree.
+   `display: none` would remove it entirely and break the native picker for
+   assistive technology. */
+.hiddenInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.error {
+  margin: var(--space-2) 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--status-failed);
+}

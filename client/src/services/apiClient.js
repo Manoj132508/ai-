@@ -38,7 +38,13 @@ function readCsrfToken() {
     ?.split('=')[1];
 }
 
-export async function apiRequest(path, { method = 'GET', body, signal } = {}) {
+/**
+ * @param rawBody  A FormData (or similar) to send as-is. Content-Type is then
+ *                 left unset ON PURPOSE so the browser can add the multipart
+ *                 boundary token; setting it by hand yields a body the server
+ *                 cannot split into parts.
+ */
+export async function apiRequest(path, { method = 'GET', body, rawBody, signal } = {}) {
   const headers = {};
   if (body !== undefined) headers['Content-Type'] = 'application/json';
 
@@ -52,7 +58,7 @@ export async function apiRequest(path, { method = 'GET', body, signal } = {}) {
     response = await fetch(`/api${path}`, {
       method,
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: rawBody ?? (body === undefined ? undefined : JSON.stringify(body)),
       signal,
       /*
        * 'include' rather than the 'same-origin' default.
