@@ -1,0 +1,20 @@
+# Normalise line endings.
+#
+# Without this, files committed from Windows carry CRLF into the repository,
+# and the Linux host we deploy to (Phase 14) sees them in shell scripts and
+# config. Worse, every checkout on a different OS shows the whole file as
+# modified, which makes diffs and blame useless.
+#
+# `text=auto eol=lf` stores LF in the repository and checks out LF everywhere,
+# including Windows. Modern Windows tooling handles LF fine.
+* text=auto eol=lf
+
+# Binaries must never be line-ending converted -- doing so corrupts them.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary

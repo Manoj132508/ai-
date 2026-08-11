@@ -28,7 +28,8 @@ dist/
 # Uploaded documents (local dev)
 uploads/
 
-# Logs and editor settings
+# Logs and editor/tool settings
 *.log
 .idea/
 .vscode/
+.claude/
