@@ -16,3 +16,4 @@ by a new record rather than edited, so the reasoning at the time survives.
 | [008](008-retrieval-threshold.md) | Refuse to answer below a retrieval score threshold | 2 | Accepted |
 | [009](009-response-envelope.md) | One response envelope and a closed error taxonomy | 6 | Accepted |
 | [010](010-csrf-double-submit.md) | Double-submit cookie for CSRF | 8 | Accepted |
+| [011](011-provider-neutral-generation.md) | Provider-neutral generation, Ollama by default | 10 | Accepted |

@@ -10,26 +10,19 @@ and the one test that does hit the real API is a separate, skippable case.
 from __future__ import annotations
 
 from collections.abc import Iterator
-from dataclasses import dataclass
 
 from app.core import logging as log
+
+# Shared types now live in base so both adapters depend on the interface, not
+# on each other. Re-exported here so existing imports
+# (`from app.pipeline.generator import GenerationRequest, ...`) keep working.
+from app.pipeline.base import (  # noqa: F401
+    GenerationFailed,
+    GenerationRequest,
+    GenerationUnavailable,
+    TextGenerator,
+)
 from app.pipeline.prompt import SYSTEM_PROMPT, build_history_messages, build_user_message
-from app.pipeline.retriever import RetrievedChunk
-
-
-class GenerationUnavailable(Exception):
-    """No API key configured. Raised rather than degrading into a fake answer."""
-
-
-class GenerationFailed(Exception):
-    """The model call failed or was declined. Message is safe to show a user."""
-
-
-@dataclass(frozen=True)
-class GenerationRequest:
-    question: str
-    chunks: list[RetrievedChunk]
-    history: list[dict]
 
 
 class AnthropicGenerator:
@@ -90,7 +83,9 @@ class AnthropicGenerator:
         as data.
         """
         messages = build_history_messages(request.history)
-        messages.append({"role": "user", "content": build_user_message(request.question, request.chunks)})
+        messages.append(
+            {"role": "user", "content": build_user_message(request.question, request.chunks)}
+        )
 
         kwargs: dict = {
             "model": self._model,

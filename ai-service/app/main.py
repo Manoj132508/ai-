@@ -15,30 +15,28 @@ no benefit.
 from __future__ import annotations
 
 import json
-from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 import chromadb
-from chromadb.config import Settings as ChromaSettings
-from fastapi import Depends, FastAPI, HTTPException, status
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
-
 from app.core import logging as log
 from app.core.config import get_settings
 from app.core.security import require_internal_key
+from app.pipeline.base import GenerationFailed, GenerationRequest, GenerationUnavailable
 from app.pipeline.chunker import chunk_pages
 from app.pipeline.embedder import LocalEmbeddingProvider
 from app.pipeline.extractor import NoExtractableText, extract_pages
-from app.pipeline.generator import (
-    AnthropicGenerator,
-    GenerationFailed,
-    GenerationRequest,
-    GenerationUnavailable,
-)
 from app.pipeline.prompt import REFUSAL_TEXT
+from app.pipeline.provider_factory import (
+    build_generator,
+    generation_configured,
+    provider_health,
+)
 from app.pipeline.retriever import retrieve
 from app.pipeline.vector_store import ChromaVectorStore, StoredChunk, collection_name_for
+from chromadb.config import Settings as ChromaSettings
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
 
 settings = get_settings()
 
@@ -50,11 +48,9 @@ chroma_client = chromadb.PersistentClient(
 )
 vector_store = ChromaVectorStore(chroma_client)
 
-generator = AnthropicGenerator(
-    model=settings.llm_model,
-    effort=settings.llm_effort,
-    max_tokens=settings.llm_max_tokens,
-)
+# Provider chosen once, from config. main.py never names a provider or touches
+# a provider SDK; the factory owns that decision (ADR 011).
+generator = build_generator(settings)
 
 
 @asynccontextmanager
@@ -116,13 +112,19 @@ class QueryRequest(BaseModel):
 
 @app.get("/health")
 def health() -> dict:
+    # provider_health reports the selected provider and whether a real answer
+    # could be produced right now -- for ollama that means probing the local
+    # server, for anthropic that a key is present. It never returns a key or
+    # any secret value.
+    health_info = provider_health(settings)
     return {
         "status": "ok",
         "service": "ai-service",
         "embedding_model": settings.embedding_model,
+        "provider": health_info["provider"],
         # Reported rather than assumed, so the Node API can tell a user that
         # answering is unavailable instead of discovering it mid-question.
-        "generation_available": settings.generation_available,
+        "generation_available": health_info["generation_available"],
     }
 
 
@@ -197,17 +199,27 @@ async def query(req: QueryRequest) -> StreamingResponse:
     Event order is fixed: meta, then zero or more token events, then citations,
     then done. Citations come LAST because which sources the answer actually
     used is only known once generation finishes.
-    """
-    result = retrieve(
-        query=req.question,
-        collection=collection_name_for(req.knowledge_base_id),
-        embedder=embedder,
-        store=vector_store,
-        top_k=settings.retrieval_top_k,
-        score_threshold=settings.retrieval_score_threshold,
-    )
 
-    async def events() -> AsyncGenerator[str, None]:
+    ``events`` is a SYNCHRONOUS generator, on purpose. The provider adapters
+    are synchronous (to keep cancellation simple and the Anthropic path
+    unchanged), and iterating a blocking generator inside an ``async`` body
+    would hold the event loop for the whole multi-second generation -- so
+    Starlette could not flush anything, and the entire stream, meta event and
+    all, would arrive as one blob at the end. Passing a sync generator instead
+    makes Starlette run it in a threadpool (``iterate_in_threadpool``), leaving
+    the loop free to flush each token the moment it is produced.
+    """
+
+    def events():
+        result = retrieve(
+            query=req.question,
+            collection=collection_name_for(req.knowledge_base_id),
+            embedder=embedder,
+            store=vector_store,
+            top_k=settings.retrieval_top_k,
+            score_threshold=settings.retrieval_score_threshold,
+        )
+
         yield _sse(
             {
                 "type": "meta",
@@ -243,10 +255,16 @@ async def query(req: QueryRequest) -> StreamingResponse:
             for chunk in result.chunks
         ]
 
-        # Checked before calling, so a missing key produces a clear error
-        # rather than an SDK exception raised somewhere inside the stream.
-        if not settings.generation_available:
-            log.warn("generation requested without an api key", request_id=req.request_id)
+        # Provider-aware, no-network config check. For anthropic this is a
+        # missing key; for ollama it is always configured (reachability is a
+        # runtime question the adapter maps to LLM_UNAVAILABLE). There is no
+        # silent fallback to the other provider in either case.
+        if not generation_configured(settings):
+            log.warn(
+                "generation not configured",
+                request_id=req.request_id,
+                provider=settings.llm_provider,
+            )
             yield _sse(
                 {
                     "type": "error",
@@ -257,30 +275,27 @@ async def query(req: QueryRequest) -> StreamingResponse:
                     ),
                 }
             )
-            # Citations are still emitted: retrieval succeeded, and the sources
-            # are genuinely useful even when nothing summarised them.
-            yield _sse({"type": "citations", "citations": citations, "grounded": True})
-            yield _sse({"type": "done"})
-            return
+        else:
+            try:
+                for text in generator.stream_answer(
+                    GenerationRequest(
+                        question=req.question,
+                        chunks=result.chunks,
+                        history=req.history,
+                        request_id=req.request_id,
+                    )
+                ):
+                    yield _sse({"type": "token", "text": text})
+            except (GenerationUnavailable, GenerationFailed) as exc:
+                # An honest error, NOT a synthesised answer. Streaming the raw
+                # retrieved chunks back and labelling them "grounded" would
+                # present unprocessed source text as if the system had answered.
+                log.warn("generation failed", request_id=req.request_id, reason=str(exc))
+                yield _sse({"type": "error", "code": "LLM_UNAVAILABLE", "message": str(exc)})
 
-        try:
-            for text in generator.stream_answer(
-                GenerationRequest(
-                    question=req.question,
-                    chunks=result.chunks,
-                    history=req.history,
-                )
-            ):
-                yield _sse({"type": "token", "text": text})
-        except (GenerationUnavailable, GenerationFailed) as exc:
-            # An honest error, NOT a synthesised answer. Streaming the raw
-            # retrieved chunks back and labelling them "grounded" would present
-            # unprocessed source text as if the system had answered.
-            log.warn("generation unavailable", request_id=req.request_id, reason=str(exc))
-            yield _sse({"type": "error", "code": "LLM_UNAVAILABLE", "message": str(exc)})
-            yield _sse({"type": "done"})
-            return
-
+        # Citations are emitted for every grounded result -- whether generation
+        # succeeded, failed, or was not configured. Retrieval succeeded, so the
+        # sources are useful even when nothing summarised them.
         yield _sse({"type": "citations", "citations": citations, "grounded": True})
         yield _sse({"type": "done"})
 

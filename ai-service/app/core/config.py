@@ -33,14 +33,26 @@ class Settings(BaseSettings):
 
     node_api_url: str = "http://127.0.0.1:4200"
 
-    # --- generation -----------------------------------------------------
-    # Optional on purpose. Everything except the final generation step runs
-    # locally, so the service must start, index documents and serve semantic
-    # search with no key present.
-    anthropic_api_key: str | None = None
-    llm_model: str = "claude-opus-5"
-    llm_effort: str = "medium"
+    # --- generation provider --------------------------------------------
+    # Ollama by default: a free, local model that needs no API key, so the
+    # complete RAG pipeline works offline. 'anthropic' switches to the paid
+    # hosted model. Validated below -- an unknown value fails at startup.
+    llm_provider: str = "ollama"
+
+    # Shared across providers.
     llm_max_tokens: int = 8192
+
+    # --- ollama (local, default) ----------------------------------------
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_model: str = "llama3.2:3b"
+
+    # --- anthropic (hosted, optional, paid) -----------------------------
+    # Optional on purpose. With the ollama default the service must start,
+    # index documents and answer questions with no key present. The key is
+    # only required when LLM_PROVIDER=anthropic.
+    anthropic_api_key: str | None = None
+    anthropic_model: str = "claude-opus-5"
+    llm_effort: str = "medium"  # anthropic-only reasoning-depth lever
 
     # --- embedding and storage -------------------------------------------
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
@@ -57,6 +69,24 @@ class Settings(BaseSettings):
     retrieval_score_threshold: float = 0.35
 
     @model_validator(mode="after")
+    def _validate_provider(self) -> "Settings":
+        """Reject an unknown provider at construction, so startup fails loudly.
+
+        Catching it here -- rather than at the first /query -- means a typo in
+        LLM_PROVIDER stops the service immediately with a clear message, not
+        hours later when someone finally asks a question.
+        """
+        supported = {"ollama", "anthropic"}
+        provider = (self.llm_provider or "").strip().lower()
+        if provider not in supported:
+            raise ValueError(
+                f"Unknown LLM_PROVIDER {self.llm_provider!r}. "
+                f"Supported: {', '.join(sorted(supported))}."
+            )
+        self.llm_provider = provider
+        return self
+
+    @model_validator(mode="after")
     def _anchor_chroma_dir(self) -> "Settings":
         """Resolve a relative chroma_dir against the repo root, not the CWD.
 
@@ -69,11 +99,6 @@ class Settings(BaseSettings):
         if not Path(self.chroma_dir).is_absolute():
             self.chroma_dir = str(_REPO_ROOT / self.chroma_dir)
         return self
-
-    @property
-    def generation_available(self) -> bool:
-        """False when no key is configured; the API reports this rather than failing late."""
-        return bool(self.anthropic_api_key)
 
 
 @lru_cache(maxsize=1)

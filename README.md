@@ -53,7 +53,7 @@ Python / FastAPI (:8000)   the RAG pipeline
    ├─ embed      all-MiniLM-L6-v2, local, 384-dim
    ├─ store      ChromaDB, one collection per knowledge base
    ├─ retrieve   top-k cosine + score threshold
-   └─ generate   Claude (claude-opus-5), grounded, cited
+   └─ generate   Ollama (local, default) or Claude, grounded, cited
    │
    ▼  SSE token stream, then a citations payload
 Node proxies the stream ──▶ React renders answer + sources
@@ -77,8 +77,8 @@ is in [`docs/adr/`](docs/adr/README.md).
 | AI service | Python 3.12, FastAPI, pypdf, sentence-transformers |
 | Vector store | ChromaDB (local, persistent) |
 | Application data | MongoDB (Atlas in production) |
-| LLM | Claude `claude-opus-5` |
-| Tests | Vitest + Supertest (Node), pytest (Python) |
+| LLM | **Ollama** (local, free, default) or **Claude** (hosted, paid), behind one provider interface ([ADR 011](docs/adr/011-provider-neutral-generation.md)) |
+| Tests | node:test + Supertest (Node), pytest (Python) |
 
 State is managed with React Context and hooks. Redux is deliberately absent —
 almost all state here is server state, and a cache-shaped problem is not a
@@ -127,10 +127,88 @@ temptation to "fix" a cookie problem by moving the token into `localStorage`
 ([ADR 003](docs/adr/003-jwt-in-httponly-cookie.md)).
 
 ```bash
-# AI service (Phase 10)
+# AI service
 python -m venv .venv && .\.venv\Scripts\Activate.ps1
 pip install -r requirements-dev.txt
 ```
+
+## Generation provider (Ollama or Anthropic)
+
+Answer generation runs behind a provider-neutral interface. Two providers are
+supported, selected by `LLM_PROVIDER` ([ADR 011](docs/adr/011-provider-neutral-generation.md)).
+
+### Ollama — free, local, the default
+
+Everything else in the pipeline is already local and free (embeddings,
+retrieval, the vector store). **Ollama** makes generation local too, so the
+*entire* RAG pipeline — including a real grounded answer — works with **no API
+key, no internet and no cost**. That is what lets any contributor run and
+verify the whole system.
+
+Install and start it, then pull the default model:
+
+```bash
+# 1. Install Ollama:  https://ollama.com/download   (Windows/macOS/Linux)
+# 2. Ollama runs as a background service on http://localhost:11434
+# 3. Download the model (~2 GB):
+ollama pull llama3.2:3b
+```
+
+`llama3.2:3b` is chosen as a sensible default: ~2 GB on disk, runs on a
+CPU-only laptop, and is capable enough for grounded question-answering over
+retrieved text (the model only has to summarise passages it is handed, not
+reason from scratch). If you have more RAM/VRAM, a larger model such as
+`llama3.1:8b` will give better answers — set `OLLAMA_MODEL` and `ollama pull`
+it. On a very constrained machine, `qwen2.5:1.5b` is smaller and faster at some
+cost to quality.
+
+**Hardware / disk:** budget the model's download size on disk (2–5 GB), and
+enough free RAM to load it (roughly the file size). Generation speed is
+CPU/GPU-bound; a 3B model is comfortably interactive on a modern laptop.
+
+### Anthropic — hosted, paid, optional
+
+For a deployment that wants frontier-quality answers, switch to Claude:
+
+```bash
+# in the repo-root .env
+LLM_PROVIDER=anthropic
+ANTHROPIC_API_KEY=sk-ant-...    # required for this provider; never commit it
+```
+
+Anthropic usage is **optional and paid** — it is only ever called when
+`LLM_PROVIDER=anthropic`. The key lives in the Python service's environment
+only; the SDK reads it directly, so our code never handles it.
+
+### Switching, and what happens when it is misconfigured
+
+- `LLM_PROVIDER=ollama` (default) needs no key.
+- `LLM_PROVIDER=anthropic` needs `ANTHROPIC_API_KEY`.
+- Any other value **fails at startup** with a clear error — no silent default.
+- There is **no silent fallback** between providers. A provider that cannot run
+  (Ollama not started, or Anthropic without a key) returns `LLM_UNAVAILABLE`;
+  retrieval and citations still work.
+
+`GET http://localhost:8000/health` reports the selected provider and whether
+generation is available right now (for Ollama, whether the local server
+responds — for Anthropic, whether a key is present):
+
+```json
+{ "provider": "ollama", "generation_available": true }
+```
+
+### Troubleshooting an unreachable Ollama
+
+If answers come back as *"Answer generation is not configured / not reachable"*
+while retrieval and citations still work:
+
+- Is Ollama running? `ollama list` should respond; the server listens on
+  `http://localhost:11434`.
+- Is the model pulled? `ollama pull llama3.2:3b` (or whatever `OLLAMA_MODEL` is
+  set to).
+- Does `OLLAMA_BASE_URL` match where Ollama is listening?
+- Check the AI service's `/health` — `generation_available: false` for the
+  `ollama` provider means the server was not reachable when probed.
 
 ## Environment variables
 
@@ -149,8 +227,23 @@ Missing production secrets throw at startup rather than surfacing on the first
 real request — a server that boots and looks healthy while misconfigured is
 worse than one that refuses to start.
 
-`ANTHROPIC_API_KEY` belongs to the Python service only, so the key exists in
-exactly one process ([ADR 002](docs/adr/002-generate-in-python.md)).
+**AI service** (repo-root `.env` — see `.env.example`). Key generation-related
+variables:
+
+| Variable | Default | Notes |
+|---|---|---|
+| `LLM_PROVIDER` | `ollama` | `ollama` or `anthropic`; unknown values fail at startup |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Where the local Ollama server listens |
+| `OLLAMA_MODEL` | `llama3.2:3b` | `ollama pull` this first |
+| `LLM_MAX_TOKENS` | `8192` | Max answer length (both providers) |
+| `ANTHROPIC_API_KEY` | *(empty)* | **Required only** when `LLM_PROVIDER=anthropic`; never committed |
+| `ANTHROPIC_MODEL` | `claude-opus-5` | Used only by the Anthropic provider |
+| `INTERNAL_API_KEY` | dev fallback | Must match `server/.env` |
+
+The key belongs to the Python service only, so it exists in exactly one process
+([ADR 002](docs/adr/002-generate-in-python.md)). Config is anchored to the
+repository root, so the service reads the same `.env` regardless of which
+directory launched it.
 
 ## API
 
