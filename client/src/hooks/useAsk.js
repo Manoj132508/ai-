@@ -35,7 +35,12 @@ export function useAsk({ knowledgeBaseId }) {
   const cancel = useCallback(() => {
     controllerRef.current?.abort();
     controllerRef.current = null;
-    setStatus((current) => (current === 'streaming' ? 'done' : current));
+    // Leave ANY busy state, not just 'streaming'. Stopping during retrieval --
+    // before the first token -- must also return the composer to idle, or the
+    // spinner and Stop button stay up forever.
+    setStatus((current) =>
+      current === 'streaming' || current === 'retrieving' ? 'done' : current,
+    );
   }, []);
 
   const ask = useCallback(
@@ -109,6 +114,14 @@ export function useAsk({ knowledgeBaseId }) {
             }
           }
         }
+
+        // The stream ended. If we are still busy -- the server sent an error
+        // event but no trailing 'done', or the connection simply closed early
+        // -- move to a terminal state so the composer un-busies. Without this
+        // net the UI hangs on the spinner after a mid-stream failure.
+        setStatus((current) =>
+          current === 'retrieving' || current === 'streaming' ? 'done' : current,
+        );
       } catch (err) {
         if (err.name === 'AbortError') return; // deliberate, not a failure
         setError({ code: err.code, message: err.message });

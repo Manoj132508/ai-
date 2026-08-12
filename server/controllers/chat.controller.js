@@ -211,17 +211,13 @@ export const ask = asyncHandler(async (req, res) => {
       req.log.error('stream failed mid-answer', { detail: err.message });
       streamError = 'The answer was interrupted. Please try again.';
       send({ type: 'error', code: 'LLM_UNAVAILABLE', message: streamError });
+      // Always terminate the stream with 'done', even after an error, so every
+      // stream ends the same way and the client never has to guess whether
+      // more is coming.
+      send({ type: 'done' });
     }
   }
 
-  /*
-   * Persist whatever exists, including a partial answer.
-   *
-   * The tokens were generated and billed, so discarding them loses real
-   * content -- and a user who returns would see a question with no answer at
-   * all. Recording it as 'partial' also makes abandonment measurable instead
-   * of invisible.
-   */
   /*
    * Persist when there is something to persist.
    *
