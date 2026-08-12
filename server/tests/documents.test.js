@@ -183,7 +183,7 @@ describe('document upload', () => {
     kbId = res.body.data.knowledgeBase.id;
   });
 
-  test('accepts a real PDF with 202 and status "uploaded"', async () => {
+  test('accepts a real PDF with 202 and status "processing"', async () => {
     const res = await client.upload(
       `/api/knowledge-bases/${kbId}/documents`,
       'report.pdf',
@@ -191,9 +191,12 @@ describe('document upload', () => {
       'application/pdf',
     );
 
-    // 202, not 201: the row exists but nothing has indexed it yet.
+    // 202, not 201: the row exists but the work the user asked for -- making
+    // the document answerable -- has not finished. The client polls `status`
+    // for that, which is why it must already read 'processing' here.
     assert.equal(res.status, 202);
-    assert.equal(res.body.data.document.status, 'uploaded');
+    assert.equal(res.body.data.document.status, 'processing');
+    assert.ok(res.body.data.document.processingStartedAt, 'the reaper needs this timestamp');
     assert.equal(res.body.data.document.mimeType, 'application/pdf');
     assert.equal(res.body.data.document.originalName, 'report.pdf');
 

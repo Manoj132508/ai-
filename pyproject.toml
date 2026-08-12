@@ -1,0 +1,17 @@
+[tool.pytest.ini_options]
+testpaths = ["ai-service/tests"]
+# Puts ai-service on sys.path so tests import `app.pipeline.chunker` rather
+# than fragile relative paths.
+pythonpath = ["ai-service"]
+addopts = "-q --strict-markers"
+markers = [
+    "live_api: hits the real Anthropic API; skipped automatically without ANTHROPIC_API_KEY",
+    "needs_model: downloads or loads the local embedding model; skipped if unavailable",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

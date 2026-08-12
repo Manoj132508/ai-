@@ -10,4 +10,15 @@ python-dotenv
 chromadb
 pypdf
 
-# Add the chosen LLM/embedding provider's official SDK in Phase 5.
+# Local embedding model. all-MiniLM-L6-v2, 384 dimensions, CPU-only.
+# NOTE: this pulls in PyTorch (~2GB). It is the price of embeddings that cost
+# nothing per call and work offline (ADR 005).
+sentence-transformers
+
+# LLM generation. Only the generation step needs an API key; embedding,
+# chunking and retrieval are entirely local.
+anthropic
+
+# HTTP client. Used for the callback to the Node API, and required by
+# FastAPI's TestClient.
+httpx

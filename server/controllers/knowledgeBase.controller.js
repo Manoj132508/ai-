@@ -3,6 +3,7 @@ import { ApiError } from '../utils/ApiError.js';
 import { ok, okPaginated, noContent } from '../utils/respond.js';
 import { findOwned } from '../utils/ownership.js';
 import { deleteStoredFile } from '../services/fileStorage.js';
+import { aiClient } from '../services/aiClient.js';
 import { KnowledgeBase, Document, Conversation, Message } from '../models/index.js';
 
 function validateBody({ name, description }, { partial = false } = {}) {
@@ -33,8 +34,6 @@ export const listKnowledgeBases = asyncHandler(async (req, res) => {
   const page = Math.max(1, Number(req.query.page) || 1);
   const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 12));
 
-  // userId is in the filter, not applied afterwards — the same index phase 7's
-  // explain() confirmed: { userId: 1, createdAt: -1 }, equality then sort.
   const filter = { userId: req.user.id };
 
   const [items, total] = await Promise.all([
@@ -63,8 +62,6 @@ export const createKnowledgeBase = asyncHandler(async (req, res) => {
     req.log.info('knowledge base created', { knowledgeBaseId: String(kb._id) });
     return ok(res, { knowledgeBase: kb }, 201);
   } catch (err) {
-    // The { userId, name } unique index. Same reasoning as duplicate email:
-    // catching the constraint is race-free, a pre-check is not.
     if (err?.code === 11000) {
       throw new ApiError('VALIDATION_ERROR', 'Please correct the highlighted fields.', {
         fields: { name: 'You already have a knowledge base with that name.' },
@@ -97,22 +94,18 @@ export const updateKnowledgeBase = asyncHandler(async (req, res) => {
   return ok(res, { knowledgeBase: kb });
 });
 
-/**
- * Deletes a knowledge base and everything under it.
- *
- * ORDER MATTERS, and it is the same reasoning as ADR 006: fail toward the
- * safer state. Vectors first (phase 10), then files, then database rows, and
- * the knowledge base itself last.
- *
- * If this fails partway, what survives is a knowledge base whose contents are
- * incomplete — visible, and deletable again. The opposite order would leave
- * orphaned files and vectors with nothing pointing at them: invisible to the
- * user, impossible to retry, and still searchable.
- */
 export const deleteKnowledgeBase = asyncHandler(async (req, res) => {
   const kb = await findOwned(KnowledgeBase, req.params.id, req.user.id, 'KB_NOT_FOUND');
 
-  // Phase 10: drop the Chroma collection here, before anything else.
+  // Drop Chroma vector collection FIRST (ADR 006)
+  try {
+    await aiClient.deleteCollection({ knowledgeBaseId: kb._id });
+  } catch (err) {
+    req.log.warn('failed to delete vector collection from Chroma', {
+      knowledgeBaseId: String(kb._id),
+      error: err.message,
+    });
+  }
 
   const documents = await Document.find({ knowledgeBaseId: kb._id }).select('storedPath');
   for (const doc of documents) {
@@ -132,3 +125,4 @@ export const deleteKnowledgeBase = asyncHandler(async (req, res) => {
 
   return noContent(res);
 });
+
