@@ -8,6 +8,7 @@ import devRoutes from './dev.routes.js';
 import authRoutes from './auth.routes.js';
 import knowledgeBaseRoutes from './knowledgeBase.routes.js';
 import documentRoutes from './document.routes.js';
+import conversationRoutes from './conversation.routes.js';
 
 const router = Router();
 
@@ -30,6 +31,7 @@ router.use('/auth', authRoutes);
  */
 router.use('/knowledge-bases', requireAuth, requireCsrfToken, knowledgeBaseRoutes);
 router.use('/documents', requireAuth, requireCsrfToken, documentRoutes);
+router.use('/conversations', requireAuth, requireCsrfToken, conversationRoutes);
 
 // --- development only ---------------------------------------------------
 if (!config.isProduction) {

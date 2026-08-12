@@ -1,0 +1,158 @@
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  min-height: 420px;
+}
+
+.transcript {
+  flex: 1;
+  max-height: 55vh;
+  overflow-y: auto;
+  padding: var(--space-2);
+}
+
+.searching {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-muted);
+  margin: 0 0 var(--space-3);
+}
+
+.answer,
+.refusal {
+  white-space: pre-wrap;
+  line-height: 1.7;
+  padding: var(--space-3);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+/* A refusal is a correct outcome, not an error -- styled as neutral
+   information rather than a failure. */
+.refusal {
+  color: var(--color-muted);
+  font-style: italic;
+}
+
+.caret {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  background: var(--color-accent);
+  vertical-align: text-bottom;
+  animation: blink 1s step-end infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+.sources {
+  margin-top: var(--space-4);
+}
+
+.sourcesTitle {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-muted);
+}
+
+.citationList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.citation {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  margin-bottom: var(--space-2);
+  background: var(--color-bg);
+}
+
+.citationHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  background: none;
+  border: 0;
+  font-family: inherit;
+  font-size: var(--font-size-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.citationIndex {
+  font-weight: 600;
+  color: var(--color-accent);
+}
+
+.citationName {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.citationPage,
+.citationScore {
+  color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.citationSnippet {
+  margin: 0;
+  padding: 0 var(--space-3) var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-2);
+}
+
+.error {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--status-failed);
+  border-radius: var(--radius);
+  color: var(--status-failed);
+  font-size: var(--font-size-sm);
+}
+
+.errorCode {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  opacity: 0.7;
+}
+
+.meta {
+  margin: var(--space-3) 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
+}
+
+.composer {
+  display: flex;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+
+.input {
+  flex: 1;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: var(--font-size-base);
+}

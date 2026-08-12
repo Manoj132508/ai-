@@ -12,6 +12,7 @@ import EmptyState from '../components/primitives/EmptyState.jsx';
 import ErrorState from '../components/primitives/ErrorState.jsx';
 import { Skeleton, SkeletonGroup, LiveStatus } from '../components/primitives/Skeleton.jsx';
 import FileDropzone from '../components/FileDropzone.jsx';
+import ChatView from '../components/ChatView.jsx';
 import { formatBytes, formatRelativeTime } from '../utils/format.js';
 import styles from './KnowledgeBasePage.module.css';
 
@@ -66,7 +67,7 @@ export default function KnowledgeBasePage({ view }) {
         </NavLink>
       </nav>
 
-      {view === 'chat' && <ChatPlaceholder kb={kb} />}
+      {view === 'chat' && <ChatView kb={kb} />}
       {view === 'documents' && <DocumentsView kbId={kbId} onDocumentsChanged={reload} />}
       {view === 'settings' && <SettingsView kb={kb} onUpdated={reload} />}
     </div>
@@ -75,20 +76,6 @@ export default function KnowledgeBasePage({ view }) {
   function tabClass(isActive) {
     return `${styles.tab} ${isActive ? styles.tabActive : ''}`;
   }
-}
-
-function ChatPlaceholder({ kb }) {
-  return (
-    <EmptyState
-      icon="💬"
-      title="Asking questions arrives in phase 10"
-      description={
-        kb.documentCount === 0
-          ? 'This knowledge base has no documents yet. Upload one first.'
-          : `${kb.documentCount} document(s) uploaded. Indexing and retrieval are not built yet.`
-      }
-    />
-  );
 }
 
 function DocumentsView({ kbId, onDocumentsChanged }) {

@@ -43,11 +43,13 @@ class _FakeStream:
     def __init__(self, texts, final):
         self._texts = texts
         self._final = final
+        self.exited = False
 
     def __enter__(self):
         return self
 
     def __exit__(self, *exc):
+        self.exited = True
         return False
 
     @property
@@ -75,7 +77,8 @@ class _FakeMessages:
         self.captured = kwargs
         if self.raises:
             raise self.raises
-        return _FakeStream(self.texts, self.final)
+        self.last_stream = _FakeStream(self.texts, self.final)
+        return self.last_stream
 
 
 class FakeClient:
@@ -221,6 +224,34 @@ def test_api_errors_become_a_safe_message():
     assert "10.0.1.14" not in str(caught.value)
     assert "sk-ant" not in str(caught.value)
     assert "temporarily unavailable" in str(caught.value)
+
+
+def test_abandoning_the_stream_closes_it_upstream():
+    """The cancellation chain, verified rather than assumed.
+
+    When the browser closes a tab mid-answer, Starlette cancels the async
+    generator, which closes this sync generator, which must exit the `with`
+    block and close the Anthropic stream -- otherwise tokens keep being
+    generated and billed for a response nobody will read.
+
+    The link that makes it work is subtle: GeneratorExit inherits from
+    BaseException, not Exception, so the broad `except Exception` in
+    stream_answer does NOT swallow it. Widening that to `except BaseException`
+    would silently break cancellation while every test still passed.
+    """
+    client = FakeClient(texts=["first ", "second ", "third"])
+    stream = AnthropicGenerator(client=client).stream_answer(
+        GenerationRequest("q", CHUNKS, [])
+    )
+
+    assert next(stream) == "first "
+    assert client.messages.last_stream.exited is False, "still open mid-answer"
+
+    stream.close()  # what a client disconnect ultimately triggers
+
+    assert client.messages.last_stream.exited is True, (
+        "upstream stream must be closed, or generation keeps running unread"
+    )
 
 
 def test_fallbacks_can_be_disabled():

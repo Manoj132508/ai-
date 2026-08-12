@@ -58,20 +58,34 @@ export const aiClient = {
     });
   },
 
-  /** Submits natural language question to RAG pipeline and returns the raw stream response for SSE. */
-  async queryRagStream({ question, knowledgeBaseId, history = [] }) {
+  /**
+   * Submits a question and returns the raw streaming response for the caller
+   * to proxy on to the browser.
+   *
+   * `signal` is what makes cancellation work end to end: aborting it tears
+   * down this request, which the Python service observes as a client
+   * disconnect, which closes its Anthropic stream and stops generation. Every
+   * link in that chain has to be wired or tokens keep being produced for an
+   * answer nobody will read.
+   */
+  async queryRagStream({ question, knowledgeBaseId, history = [], signal, requestId }) {
     const url = `${config.aiServiceUrl}/query`;
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-Internal-Key': config.internalApiKey,
+        // Same id both services log under, so one grep reconstructs the
+        // request across the process boundary.
+        ...(requestId ? { 'X-Request-Id': requestId } : {}),
       },
       body: JSON.stringify({
         question,
         knowledge_base_id: String(knowledgeBaseId),
         history,
+        request_id: requestId ?? null,
       }),
+      signal,
     });
 
     if (!response.ok) {
