@@ -1,4 +1,6 @@
+import { Suspense } from 'react';
 import { Outlet } from 'react-router-dom';
+import Spinner from '../components/primitives/Spinner.jsx';
 import styles from './AuthLayout.module.css';
 
 /**
@@ -14,7 +16,16 @@ export default function AuthLayout() {
     <div className={styles.wrapper}>
       <main className={styles.card}>
         <h1 className={styles.brand}>AI Knowledge Assistant</h1>
-        <Outlet />
+        {/* Suspense boundary for the lazily-loaded login/register chunks. */}
+        <Suspense
+          fallback={
+            <div style={{ display: 'grid', placeItems: 'center', minHeight: '8rem' }}>
+              <Spinner label="Loading" />
+            </div>
+          }
+        >
+          <Outlet />
+        </Suspense>
       </main>
     </div>
   );

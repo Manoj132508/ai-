@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { Outlet, useLocation, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import Button from '../components/primitives/Button.jsx';
+import Spinner from '../components/primitives/Spinner.jsx';
 import styles from './AppLayout.module.css';
 
 /**
@@ -118,7 +119,18 @@ export default function AppLayout() {
         {/* tabIndex={-1} makes the skip link's target focusable, so focus
             actually moves here rather than only scrolling. */}
         <main id="main" className={styles.main} tabIndex={-1}>
-          <Outlet />
+          {/* Suspense boundary for the code-split page chunks (App.jsx). It
+              wraps only the Outlet, so while a route's chunk loads the header
+              and sidebar stay put and just the content area shows a spinner. */}
+          <Suspense
+            fallback={
+              <div style={{ display: 'grid', placeItems: 'center', minHeight: '40vh' }}>
+                <Spinner size="lg" label="Loading" />
+              </div>
+            }
+          >
+            <Outlet />
+          </Suspense>
         </main>
       </div>
     </div>

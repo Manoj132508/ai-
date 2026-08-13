@@ -18,6 +18,25 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        /*
+         * Split the framework into its own long-lived chunk.
+         *
+         * react, react-dom and react-router change on the order of once a
+         * quarter, while our app code changes constantly. Keeping them in a
+         * separate `vendor` chunk means a normal app deploy leaves the vendor
+         * file's content hash -- and therefore the user's cached copy of the
+         * ~140 kB of framework -- untouched. Without this split, every app
+         * change re-hashes one giant bundle and re-downloads the framework too.
+         */
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+        },
+      },
+    },
+  },
   test: {
     // jsdom gives the tests a DOM (document, window, fetch is polyfilled by the
     // runner) so component and hook tests run headless in Node.
