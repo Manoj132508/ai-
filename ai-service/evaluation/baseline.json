@@ -1,0 +1,12 @@
+{
+  "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+  "threshold": 0.35,
+  "top_k": 5,
+  "metrics": {
+    "retrieval_hit_rate": 1.0,
+    "retrieval_mrr": 0.9545454545454546,
+    "refusal_accuracy": 0.7647058823529411,
+    "false_answer_rate": 0.16666666666666666,
+    "over_refusal_rate": 0.2727272727272727
+  }
+}
