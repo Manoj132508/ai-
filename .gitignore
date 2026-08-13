@@ -7,7 +7,8 @@ __pycache__/
 # Local secrets and environment overrides
 .env
 .env.*
-!.env.example
+# ...but keep the committed templates (.env.example, .env.compose.example, ...)
+!.env*.example
 
 # Test, lint, and type-check caches
 .pytest_cache/

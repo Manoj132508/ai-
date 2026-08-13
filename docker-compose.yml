@@ -1,0 +1,82 @@
+# Full-stack, production-like orchestration of the AI Knowledge Assistant.
+#
+#   cp .env.compose.example .env    # then fill in the secrets
+#   docker compose up --build
+#   open http://localhost:8080
+#
+# Four services on one private network. Chroma is NOT a service: the AI service
+# embeds it (PersistentClient) and persists to the chroma_data volume.
+#
+# THE TWO NON-OBVIOUS WIRES:
+#  1. `uploads` is shared between server (writes the file) and ai-service (reads
+#     it by the file_path the server sends). It MUST mount at the same absolute
+#     path in both, and ai-service only needs to read it.
+#  2. Auth cookies are `secure` when NODE_ENV=production, so a browser drops
+#     them over plain http. Access over HTTPS in a real deploy; for a quick
+#     local http trial set NODE_ENV=development in .env (see DEPLOYMENT.md).
+
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  ai-service:
+    build: ./ai-service
+    restart: unless-stopped
+    environment:
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?set INTERNAL_API_KEY in .env}
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+      # Ollama runs on the HOST by default (not containerized). From inside a
+      # container the host is reachable as host.docker.internal.
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:3b}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      CHROMA_DIR: /data/chroma
+    volumes:
+      - chroma_data:/data/chroma
+      - uploads:/data/uploads:ro   # reads the files the server wrote
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # lets the container reach host Ollama on Linux
+
+  server:
+    build: ./server
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+      ai-service:
+        condition: service_started
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 4200
+      MONGODB_URI: mongodb://mongo:27017/ai_knowledge_assistant
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?set INTERNAL_API_KEY in .env}
+      AI_SERVICE_URL: http://ai-service:8000
+      # The browser origin, for CORS. With the nginx proxy the app is
+      # same-origin, so this matters only if the SPA is served elsewhere.
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
+      UPLOAD_DIR: /data/uploads
+    volumes:
+      - uploads:/data/uploads       # writes uploaded files (shared with ai-service)
+
+  client:
+    build: ./client
+    restart: unless-stopped
+    depends_on:
+      - server
+    ports:
+      - "${CLIENT_PORT:-8080}:80"
+
+volumes:
+  mongo_data:
+  chroma_data:
+  uploads:
