@@ -13,7 +13,8 @@ this in your documents"* when the answer isn't there.
 
 📖 **[Read the case study](docs/case-study.md)** — the problem, the key
 architectural decisions and their trade-offs, the hard problems solved, and the
-measured outcomes.
+measured outcomes. · 🎤 **[Interview prep](docs/interview-prep.md)** — the
+questions this project invites, with defensible answers.
 
 ---
 
