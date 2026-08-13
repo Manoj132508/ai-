@@ -392,7 +392,18 @@ poorly · OCR for scanned PDFs · a real job queue with retries and a
 dead-letter queue · team sharing and shared knowledge bases · document
 versioning · streaming re-rank before generation · S3 instead of local disk.
 
-## Live demo
+## Deployment
 
-Not deployed yet — Phase 14. Target: S3 + CloudFront for the SPA, a single EC2
-instance running both services behind nginx, MongoDB Atlas.
+The whole system is containerized — `docker compose up --build` brings up the
+client (nginx), server, AI service and MongoDB on one network, with ChromaDB
+embedded in the AI service and a shared uploads volume between server and AI
+service. A GitHub Actions workflow runs all three test suites on every push.
+
+See **[DEPLOYMENT.md](DEPLOYMENT.md)** for the run steps, the environment
+reference, the secure-cookie/HTTPS caveat, and the cloud path (S3 + CloudFront
+for the SPA; ECS/VM for the services behind TLS; Atlas for Mongo). Topology
+rationale is in [ADR 014](docs/adr/014-deployment-topology.md).
+
+Not yet deployed to a live URL — the images are authored and their inputs
+verified, but Docker was unavailable on the build machine, so `docker compose
+up` is the first step where Docker is installed.
