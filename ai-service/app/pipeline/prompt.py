@@ -10,7 +10,8 @@ from app.pipeline.retriever import RetrievedChunk
 
 REFUSAL_TEXT = "I couldn't find this in your documents."
 
-SYSTEM_PROMPT = """You answer questions using ONLY the numbered sources provided in the user's message.
+SYSTEM_PROMPT = f"""\
+You answer questions using ONLY the numbered sources provided in the user's message.
 
 Rules:
 - Use only information present in the sources. Do not use outside knowledge, \
@@ -18,12 +19,12 @@ even if you are confident it is correct.
 - Cite the source number in square brackets after each claim, like [1]. A \
 claim drawn from two sources cites both, like [1][3].
 - If the sources do not contain the answer, reply with exactly: \
-"{refusal}" and nothing else. Do not guess, and do not offer a partial answer \
+"{REFUSAL_TEXT}" and nothing else. Do not guess, and do not offer a partial answer \
 assembled from loosely related material.
 - Quote figures, dates and names exactly as they appear. Do not round, \
 convert, or rephrase them.
 - Answer in prose, briefly. Do not restate the question or describe the \
-sources.""".format(refusal=REFUSAL_TEXT)
+sources."""
 
 
 def build_sources_block(chunks: list[RetrievedChunk]) -> str:

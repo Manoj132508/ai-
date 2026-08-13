@@ -2,9 +2,8 @@
 
 import secrets
 
-from fastapi import Header, HTTPException, status
-
 from app.core.config import get_settings
+from fastapi import Header, HTTPException, status
 
 INTERNAL_HEADER = "X-Internal-Key"
 

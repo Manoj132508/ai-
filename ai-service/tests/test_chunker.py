@@ -7,7 +7,6 @@ nothing errors.
 """
 
 import pytest
-
 from app.pipeline.chunker import DEFAULT_SEPARATORS, Chunk, Page, chunk_pages
 
 SIZE = 200
@@ -210,5 +209,7 @@ def test_default_separators_run_coarse_to_fine():
 def test_chunk_is_immutable():
     chunk = chunk_pages([Page(number=1, text="Hello.")])[0]
     assert isinstance(chunk, Chunk)
-    with pytest.raises(Exception):
+    # A frozen dataclass raises FrozenInstanceError, a subclass of
+    # AttributeError -- specific, not a blind `Exception` catch.
+    with pytest.raises(AttributeError):
         chunk.text = "tampered"  # frozen dataclass

@@ -1,7 +1,6 @@
 """Retrieval and the grounding decision (ADR 008). Fully offline."""
 
 import pytest
-
 from app.pipeline.embedder import HashEmbeddingProvider
 from app.pipeline.retriever import RetrievedChunk, distance_to_similarity, retrieve
 from app.pipeline.vector_store import InMemoryVectorStore, StoredChunk, collection_name_for

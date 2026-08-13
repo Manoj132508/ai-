@@ -11,7 +11,6 @@ import math
 import os
 
 import pytest
-
 from app.pipeline.embedder import EmbeddingProvider, HashEmbeddingProvider, LocalEmbeddingProvider
 
 

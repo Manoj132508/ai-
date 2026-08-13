@@ -9,7 +9,6 @@ and skips cleanly without a key.
 import os
 
 import pytest
-
 from app.pipeline.generator import (
     AnthropicGenerator,
     GenerationFailed,
