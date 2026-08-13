@@ -107,12 +107,27 @@ export const deleteKnowledgeBase = asyncHandler(async (req, res) => {
     });
   }
 
-  const documents = await Document.find({ knowledgeBaseId: kb._id }).select('storedPath');
+  /*
+   * .lean() is safe HERE and deliberately not on the list endpoints.
+   *
+   * These two reads are projected and consumed internally -- a storedPath to
+   * delete a file, an _id to build a $in -- and never reach res.json(). So we
+   * skip Mongoose hydration (change tracking, getters, virtuals) and get plain
+   * objects, which is all the loop below needs.
+   *
+   * The client-facing list endpoints (listKnowledgeBases, listDocuments,
+   * listConversations, listMessages) must NOT do this: their results are
+   * serialised through the schema's toJSON transform, which renames _id -> id
+   * and strips __v/hidden fields. .lean() bypasses that transform, so those
+   * responses would regress to raw _id and break the API contract. The read
+   * model is documented in ADR 013.
+   */
+  const documents = await Document.find({ knowledgeBaseId: kb._id }).select('storedPath').lean();
   for (const doc of documents) {
     await deleteStoredFile(doc.storedPath, { requestId: req.id });
   }
 
-  const conversations = await Conversation.find({ knowledgeBaseId: kb._id }).select('_id');
+  const conversations = await Conversation.find({ knowledgeBaseId: kb._id }).select('_id').lean();
   await Message.deleteMany({ conversationId: { $in: conversations.map((c) => c._id) } });
   await Conversation.deleteMany({ knowledgeBaseId: kb._id });
   await Document.deleteMany({ knowledgeBaseId: kb._id });
