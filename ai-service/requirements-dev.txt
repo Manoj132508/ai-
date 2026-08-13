@@ -1,0 +1,8 @@
+# Development / CI dependencies: everything in requirements.txt plus the test
+# and lint tools. Installed in CI so the Python suite and ruff run against the
+# same pinned versions used locally.
+-r requirements.txt
+
+pytest==9.1.1
+pytest-asyncio==1.4.0
+ruff==0.16.2
