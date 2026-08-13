@@ -3,7 +3,7 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import model_validator
+from pydantic import SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # ai-service/app/core/config.py -> parents[3] is the repository root, where
@@ -21,6 +21,11 @@ class Settings(BaseSettings):
         env_file=str(_REPO_ROOT / ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
+        # A validation error must never echo the offending input back -- a bad
+        # value for a secret field would otherwise land the key in the
+        # traceback and the logs. Combined with SecretStr below, the key cannot
+        # leak through a config error.
+        hide_input_in_errors=True,
     )
 
     # --- security -------------------------------------------------------
@@ -50,9 +55,26 @@ class Settings(BaseSettings):
     # Optional on purpose. With the ollama default the service must start,
     # index documents and answer questions with no key present. The key is
     # only required when LLM_PROVIDER=anthropic.
-    anthropic_api_key: str | None = None
+    #
+    # SecretStr keeps the value out of reprs, logs and tracebacks -- printing
+    # the settings object or a validation error shows '**********', never the
+    # key. Read the real value only where it is used, via .get_secret_value().
+    anthropic_api_key: SecretStr | None = None
     anthropic_model: str = "claude-opus-5"
     llm_effort: str = "medium"  # anthropic-only reasoning-depth lever
+
+    @property
+    def anthropic_key_value(self) -> str | None:
+        """The plaintext key, or None when unset/blank.
+
+        An empty env value parses to SecretStr(''), which is truthy as an
+        object -- so callers must not do bool(anthropic_api_key). This
+        normalises blank to None so a missing key reads as missing everywhere.
+        """
+        if self.anthropic_api_key is None:
+            return None
+        value = self.anthropic_api_key.get_secret_value()
+        return value or None
 
     # --- embedding and storage -------------------------------------------
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"

@@ -48,6 +48,15 @@ def test_builds_anthropic_adapter():
     assert isinstance(gen, AnthropicGenerator)
 
 
+def test_anthropic_adapter_is_wired_with_the_key():
+    """The key from settings (a SecretStr from .env) must be passed to the
+    adapter -- the bug was that it was loaded but never handed to the SDK."""
+    gen = build_generator(
+        make_settings(llm_provider="anthropic", anthropic_api_key="sk-ant-REAL")
+    )
+    assert gen._api_key == "sk-ant-REAL"
+
+
 def test_provider_is_case_and_whitespace_insensitive():
     # The config validator normalises, but the factory is defensive too.
     assert make_settings(llm_provider="  Ollama ").llm_provider == "ollama"
@@ -96,10 +105,28 @@ def test_anthropic_requires_a_key():
 # --- health ------------------------------------------------------------------
 
 
-def test_health_reports_ollama_reachable(monkeypatch):
-    monkeypatch.setattr(httpx, "get", lambda *a, **k: httpx.Response(200))
-    health = provider_health(make_settings(llm_provider="ollama"))
+def _tags(*model_names):
+    return httpx.Response(200, json={"models": [{"name": n} for n in model_names]})
+
+
+def test_health_ollama_available_when_server_up_and_model_present(monkeypatch):
+    monkeypatch.setattr(httpx, "get", lambda *a, **k: _tags("llama3.2:3b", "other:model"))
+    health = provider_health(make_settings(llm_provider="ollama", ollama_model="llama3.2:3b"))
     assert health == {"provider": "ollama", "generation_available": True}
+
+
+def test_health_ollama_unavailable_when_model_absent(monkeypatch):
+    """The reported bug: server reachable but the configured model not pulled
+    must report unavailable, not available."""
+    monkeypatch.setattr(httpx, "get", lambda *a, **k: _tags("some-other-model:latest"))
+    health = provider_health(make_settings(llm_provider="ollama", ollama_model="llama3.2:3b"))
+    assert health["generation_available"] is False
+
+
+def test_health_ollama_model_without_tag_matches_latest(monkeypatch):
+    monkeypatch.setattr(httpx, "get", lambda *a, **k: _tags("mistral:latest"))
+    health = provider_health(make_settings(llm_provider="ollama", ollama_model="mistral"))
+    assert health["generation_available"] is True
 
 
 def test_health_reports_ollama_unreachable(monkeypatch):

@@ -15,7 +15,7 @@ no benefit.
 from __future__ import annotations
 
 import json
-from contextlib import asynccontextmanager
+from contextlib import aclosing, asynccontextmanager
 
 import chromadb
 from app.core import logging as log
@@ -37,6 +37,7 @@ from chromadb.config import Settings as ChromaSettings
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
 
 settings = get_settings()
 
@@ -111,20 +112,26 @@ class QueryRequest(BaseModel):
 
 
 @app.get("/health")
-def health() -> dict:
+async def health() -> dict:
     # provider_health reports the selected provider and whether a real answer
-    # could be produced right now -- for ollama that means probing the local
-    # server, for anthropic that a key is present. It never returns a key or
-    # any secret value.
-    health_info = provider_health(settings)
+    # could be produced right now -- for ollama that means the local server is
+    # up AND the configured model is pulled, for anthropic that a key is
+    # present. It never returns a key or any secret value. Probing runs off the
+    # event loop because it does network I/O.
+    health_info = await run_in_threadpool(provider_health, settings)
+    available = health_info["generation_available"]
     return {
-        "status": "ok",
+        # "degraded" when a real answer cannot be produced right now (server
+        # down, model absent, or no key), matching the Node health vocabulary.
+        # Retrieval and search still work in that state, so it is degraded,
+        # not down.
+        "status": "ok" if available else "degraded",
         "service": "ai-service",
         "embedding_model": settings.embedding_model,
         "provider": health_info["provider"],
         # Reported rather than assumed, so the Node API can tell a user that
         # answering is unavailable instead of discovering it mid-question.
-        "generation_available": health_info["generation_available"],
+        "generation_available": available,
     }
 
 
@@ -200,18 +207,17 @@ async def query(req: QueryRequest) -> StreamingResponse:
     then done. Citations come LAST because which sources the answer actually
     used is only known once generation finishes.
 
-    ``events`` is a SYNCHRONOUS generator, on purpose. The provider adapters
-    are synchronous (to keep cancellation simple and the Anthropic path
-    unchanged), and iterating a blocking generator inside an ``async`` body
-    would hold the event loop for the whole multi-second generation -- so
-    Starlette could not flush anything, and the entire stream, meta event and
-    all, would arrive as one blob at the end. Passing a sync generator instead
-    makes Starlette run it in a threadpool (``iterate_in_threadpool``), leaving
-    the loop free to flush each token the moment it is produced.
+    ``events`` is an ASYNC generator that consumes the provider's async stream.
+    That is what gives two properties at once: each token flushes the moment it
+    is produced (real await points let the loop write), and a downstream
+    disconnect cancels the task so the upstream connection is closed promptly
+    (see the Ollama adapter). Retrieval is synchronous and CPU-bound, so it runs
+    off the loop via run_in_threadpool.
     """
 
-    def events():
-        result = retrieve(
+    async def events():
+        result = await run_in_threadpool(
+            retrieve,
             query=req.question,
             collection=collection_name_for(req.knowledge_base_id),
             embedder=embedder,
@@ -277,19 +283,25 @@ async def query(req: QueryRequest) -> StreamingResponse:
             )
         else:
             try:
-                for text in generator.stream_answer(
-                    GenerationRequest(
-                        question=req.question,
-                        chunks=result.chunks,
-                        history=req.history,
-                        request_id=req.request_id,
-                    )
-                ):
-                    yield _sse({"type": "token", "text": text})
+                # aclosing guarantees the provider stream is closed when THIS
+                # generator is closed (a client disconnect) -- otherwise the
+                # `async for` would abandon it without running its cleanup, and
+                # the upstream connection would leak.
+                gen_request = GenerationRequest(
+                    question=req.question,
+                    chunks=result.chunks,
+                    history=req.history,
+                    request_id=req.request_id,
+                )
+                async with aclosing(generator.astream_answer(gen_request)) as stream:
+                    async for text in stream:
+                        yield _sse({"type": "token", "text": text})
             except (GenerationUnavailable, GenerationFailed) as exc:
                 # An honest error, NOT a synthesised answer. Streaming the raw
                 # retrieved chunks back and labelling them "grounded" would
                 # present unprocessed source text as if the system had answered.
+                # str(exc) is safe here: the adapters raise only authored
+                # messages, never a raw provider error.
                 log.warn("generation failed", request_id=req.request_id, reason=str(exc))
                 yield _sse({"type": "error", "code": "LLM_UNAVAILABLE", "message": str(exc)})
 

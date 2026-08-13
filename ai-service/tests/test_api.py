@@ -10,19 +10,29 @@ INTERNAL_KEY = settings.internal_api_key
 HEADERS = {"X-Internal-Key": INTERNAL_KEY}
 
 
-def test_health_check():
-    response = client.get("/health")
-    assert response.status_code == 200
-    data = response.json()
-    # "ok" / "degraded", matching the Node health endpoint. Two services
-    # reporting health with different vocabularies means two things to learn
-    # and two dashboards to write.
+def test_health_reports_ok_when_generation_available(monkeypatch):
+    monkeypatch.setattr(
+        "app.main.provider_health",
+        lambda s: {"provider": "ollama", "generation_available": True},
+    )
+    data = client.get("/health").json()
     assert data["status"] == "ok"
     assert data["service"] == "ai-service"
-    assert "generation_available" in data
-    # The health endpoint now reports which provider is selected.
-    assert data["provider"] == settings.llm_provider
-    # A boolean, never a key or other secret.
+    assert data["provider"] == "ollama"
+    assert data["generation_available"] is True
+
+
+def test_health_reports_degraded_when_generation_unavailable(monkeypatch):
+    """When a real answer cannot be produced (server down, model absent, or no
+    key), the service is degraded -- retrieval still works, so it is not down."""
+    monkeypatch.setattr(
+        "app.main.provider_health",
+        lambda s: {"provider": "ollama", "generation_available": False},
+    )
+    data = client.get("/health").json()
+    assert data["status"] == "degraded"
+    assert data["generation_available"] is False
+    # Still a boolean, never a key or other secret.
     assert isinstance(data["generation_available"], bool)
 
 
@@ -87,7 +97,7 @@ def test_grounding_refusal_never_calls_the_provider(tmp_path, monkeypatch):
     monkeypatch.setattr("app.main.embedder", fake_embedder)
 
     class ExplodingGenerator:
-        def stream_answer(self, request):
+        def astream_answer(self, request):
             raise AssertionError("provider called for an ungrounded question")
 
     monkeypatch.setattr("app.main.generator", ExplodingGenerator())
@@ -122,5 +132,55 @@ def test_grounding_refusal_never_calls_the_provider(tmp_path, monkeypatch):
         # The provider was never invoked (or the ExplodingGenerator would have
         # failed the test) and no LLM error was emitted.
         assert "LLM_UNAVAILABLE" not in body
+    finally:
+        client.post("/delete-collection", json={"knowledge_base_id": kb_id}, headers=HEADERS)
+
+
+def test_empty_generation_emits_no_token_event(tmp_path, monkeypatch):
+    """A grounded question whose provider yields nothing must emit NO token
+    event -- so the Node layer has empty content and persists nothing (no empty
+    'complete' assistant message)."""
+    fake_embedder = HashEmbeddingProvider(dimension=384)
+    monkeypatch.setattr("app.main.embedder", fake_embedder)
+
+    class EmptyGenerator:
+        async def astream_answer(self, request):
+            return
+            yield  # unreachable: makes this an async generator that yields nothing
+
+    monkeypatch.setattr("app.main.generator", EmptyGenerator())
+    monkeypatch.setattr("app.main.generation_configured", lambda s: True)
+
+    doc_path = tmp_path / "policy.txt"
+    doc_path.write_text("Termination requires 30 days written notification.")
+    kb_id, doc_id = "kb_empty_gen", "doc_empty_gen"
+    client.post(
+        "/index",
+        headers=HEADERS,
+        json={
+            "document_id": doc_id, "knowledge_base_id": kb_id,
+            "file_path": str(doc_path), "filename": "policy.txt", "mime_type": "text/plain",
+        },
+    )
+
+    try:
+        resp = client.post(
+            "/query",
+            headers=HEADERS,
+            json={"question": "Termination requires 30 days written notification.",
+                  "knowledge_base_id": kb_id},
+        )
+        assert resp.status_code == 200
+        # Parse the SSE events; there must be a grounded meta, citations and
+        # done, but zero token events.
+        events = [
+            __import__("json").loads(line[6:])
+            for line in resp.text.splitlines()
+            if line.startswith("data: ")
+        ]
+        types = [e["type"] for e in events]
+        assert "token" not in types, "empty generation must not emit a token event"
+        assert types.count("citations") == 1
+        assert types[-1] == "done"
     finally:
         client.post("/delete-collection", json={"knowledge_base_id": kb_id}, headers=HEADERS)

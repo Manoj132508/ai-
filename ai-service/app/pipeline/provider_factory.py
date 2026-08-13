@@ -42,6 +42,11 @@ def build_generator(settings) -> TextGenerator:
 
     if provider == ANTHROPIC:
         return AnthropicGenerator(
+            # The key is passed EXPLICITLY from settings (loaded from .env into
+            # a SecretStr). The SDK cannot read it from the environment, so
+            # without this the Anthropic provider would authenticate with no
+            # key and fail every request.
+            api_key=settings.anthropic_key_value,
             model=settings.anthropic_model,
             effort=settings.llm_effort,
             max_tokens=settings.llm_max_tokens,
@@ -63,35 +68,53 @@ def generation_configured(settings) -> bool:
     """
     provider = (settings.llm_provider or "").strip().lower()
     if provider == ANTHROPIC:
-        return bool(settings.anthropic_api_key)
+        return bool(settings.anthropic_key_value)
     if provider == OLLAMA:
         return True
     return False
 
 
-def _ollama_reachable(settings) -> bool:
-    """A short, non-throwing reachability probe for the health endpoint only."""
+def _normalise_model(name: str) -> str:
+    """A bare model reference (no tag) resolves to ':latest' in Ollama."""
+    return name if ":" in name else f"{name}:latest"
+
+
+def _ollama_model_available(settings) -> bool:
+    """True only when the local server responds AND the configured model is
+    actually pulled.
+
+    Reachability alone is not enough: a running server with the model missing
+    would report 'available' and then fail every generation with a model-not-
+    found error. /api/tags lists the pulled models; the configured one must be
+    among them.
+    """
     url = f"{settings.ollama_base_url.rstrip('/')}/api/tags"
     try:
         response = httpx.get(url, timeout=1.5)
-        return response.status_code == 200
-    except httpx.HTTPError:
+        if response.status_code != 200:
+            return False
+        names = {m.get("name", "") for m in response.json().get("models", [])}
+    except (httpx.HTTPError, ValueError):
         return False
+
+    wanted = _normalise_model(settings.ollama_model)
+    return any(_normalise_model(n) == wanted for n in names)
 
 
 def provider_health(settings) -> dict:
     """Health facts for /health. Never includes a key or any secret value.
 
     generation_available means 'a real answer could be produced right now':
-    for ollama, that the local server responds; for anthropic, that a key is
-    present. It is a boolean only -- the actual key is never read out.
+    for ollama, that the local server responds AND the configured model is
+    pulled; for anthropic, that a key is present. It is a boolean only -- the
+    actual key is never read out.
     """
     provider = (settings.llm_provider or "").strip().lower()
 
     if provider == ANTHROPIC:
-        available = bool(settings.anthropic_api_key)
+        available = bool(settings.anthropic_key_value)
     elif provider == OLLAMA:
-        available = _ollama_reachable(settings)
+        available = _ollama_model_available(settings)
     else:
         available = False
         log.warn("health probed with unknown provider", provider=provider)

@@ -189,12 +189,15 @@ only; the SDK reads it directly, so our code never handles it.
   (Ollama not started, or Anthropic without a key) returns `LLM_UNAVAILABLE`;
   retrieval and citations still work.
 
-`GET http://localhost:8000/health` reports the selected provider and whether
-generation is available right now (for Ollama, whether the local server
-responds — for Anthropic, whether a key is present):
+`GET http://localhost:8000/health` reports the selected provider and whether a
+real answer could be produced right now — for Ollama, whether the local server
+responds **and the configured model is actually pulled**; for Anthropic,
+whether a key is present. When generation is unavailable the overall `status`
+is `degraded` (retrieval and search still work), not `ok`:
 
 ```json
-{ "provider": "ollama", "generation_available": true }
+{ "status": "ok",       "provider": "ollama", "generation_available": true }
+{ "status": "degraded", "provider": "ollama", "generation_available": false }
 ```
 
 ### Troubleshooting an unreachable Ollama
@@ -207,8 +210,9 @@ while retrieval and citations still work:
 - Is the model pulled? `ollama pull llama3.2:3b` (or whatever `OLLAMA_MODEL` is
   set to).
 - Does `OLLAMA_BASE_URL` match where Ollama is listening?
-- Check the AI service's `/health` — `generation_available: false` for the
-  `ollama` provider means the server was not reachable when probed.
+- Check the AI service's `/health` — `status: "degraded"` /
+  `generation_available: false` for the `ollama` provider means the server was
+  not reachable, or the configured model was not pulled, when probed.
 
 ## Environment variables
 

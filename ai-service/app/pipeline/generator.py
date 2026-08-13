@@ -9,7 +9,7 @@ and the one test that does hit the real API is a separate, skippable case.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Iterator
 
 from app.core import logging as log
 
@@ -21,6 +21,7 @@ from app.pipeline.base import (  # noqa: F401
     GenerationRequest,
     GenerationUnavailable,
     TextGenerator,
+    sync_to_async_stream,
 )
 from app.pipeline.prompt import SYSTEM_PROMPT, build_history_messages, build_user_message
 
@@ -51,12 +52,14 @@ class AnthropicGenerator:
         self,
         *,
         client=None,
+        api_key: str | None = None,
         model: str = "claude-opus-5",
         effort: str = "medium",
         max_tokens: int = 8192,
         enable_fallbacks: bool = True,
     ) -> None:
         self._client = client
+        self._api_key = api_key
         self._model = model
         self._effort = effort
         self._max_tokens = max_tokens
@@ -70,9 +73,14 @@ class AnthropicGenerator:
         except ImportError as exc:  # pragma: no cover - dependency guard
             raise GenerationUnavailable("The anthropic package is not installed.") from exc
 
-        # Zero-argument constructor: the SDK reads ANTHROPIC_API_KEY from the
-        # environment itself, so the key is never handled in our code.
-        self._client = anthropic.Anthropic()
+        # The key is passed EXPLICITLY. It comes from the settings layer, which
+        # loads it from the repo-root .env into a SecretStr -- it is NOT in the
+        # process environment, so a zero-argument anthropic.Anthropic() would
+        # find no key and every request would fail auth. This is the wiring the
+        # zero-arg form silently missed.
+        if not self._api_key:
+            raise GenerationUnavailable("No Anthropic API key is configured.")
+        self._client = anthropic.Anthropic(api_key=self._api_key)
         return self._client
 
     def build_request_kwargs(self, request: GenerationRequest) -> dict:
@@ -101,8 +109,19 @@ class AnthropicGenerator:
 
         return kwargs
 
+    def astream_answer(self, request: GenerationRequest) -> AsyncIterator[str]:
+        """Async entry point used by the orchestration layer.
+
+        The Anthropic SDK stream is synchronous, so it runs in a threadpool via
+        sync_to_async_stream -- the event loop stays free to flush each token,
+        and all of the stop_reason / refusal / fallback logic below is reused
+        unchanged. Cancellation is best-effort for this path (see the helper);
+        the Ollama default cancels promptly.
+        """
+        return sync_to_async_stream(self.stream_answer(request))
+
     def stream_answer(self, request: GenerationRequest) -> Iterator[str]:
-        """Yields answer text as it is generated.
+        """Yields answer text as it is generated (synchronous SDK stream).
 
         Streaming rather than a single response: a grounded answer can take
         several seconds, and a user watching a blank screen assumes it has
@@ -123,12 +142,12 @@ class AnthropicGenerator:
         except GenerationFailed:
             raise
         except Exception as exc:
-            # The raw exception may carry request internals, so it is logged
-            # and a generic message is raised for display -- the same rule as
-            # the Node error handler.
-            # `detail=`, not `message=`: the logger takes the message
-            # positionally, so a `message` keyword collides with it.
-            log.error("llm request failed", error_type=type(exc).__name__, detail=str(exc))
+            # Only the exception TYPE is logged, never str(exc). A provider
+            # error can embed request internals -- an auth failure in
+            # particular may echo the key -- so the raw text must not reach the
+            # logs. The user gets a generic message, the same rule as the Node
+            # error handler.
+            log.error("llm request failed", error_type=type(exc).__name__)
             raise GenerationFailed(
                 "The answering service is temporarily unavailable. Please try again shortly."
             ) from exc

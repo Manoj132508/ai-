@@ -4,6 +4,9 @@ testpaths = ["ai-service/tests"]
 # than fragile relative paths.
 pythonpath = ["ai-service"]
 addopts = "-q --strict-markers"
+# The Ollama adapter is natively async, so its tests are async. "auto" runs
+# any `async def test_*` without a per-test marker.
+asyncio_mode = "auto"
 markers = [
     "live_api: hits the real Anthropic API; skipped automatically without ANTHROPIC_API_KEY",
     "needs_model: downloads or loads the local embedding model; skipped if unavailable",
