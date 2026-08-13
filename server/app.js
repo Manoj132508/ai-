@@ -5,6 +5,7 @@ import cookieParser from 'cookie-parser';
 import { config } from './config/env.js';
 import { requestId } from './middleware/requestId.js';
 import { requestLogger } from './middleware/requestLogger.js';
+import { securityHeaders } from './middleware/securityHeaders.js';
 import { notFound } from './middleware/notFound.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import routes from './routes/index.js';
@@ -28,6 +29,12 @@ import routes from './routes/index.js';
 export function createApp() {
   const app = express();
 
+  // 0. DISABLE X-POWERED-BY -- Express advertises itself in every response by
+  //    default. That header hands an attacker free reconnaissance (which
+  //    framework, therefore which CVEs to try) for zero benefit. Disabling is
+  //    the correct removal: setting it to '' would still send an empty header.
+  app.disable('x-powered-by');
+
   // 1. TRUST PROXY -- before anything reads req.ip or req.protocol.
   //    In production nginx terminates TLS, so without this every request
   //    appears to come from 127.0.0.1 over http. That silently breaks
@@ -41,6 +48,11 @@ export function createApp() {
   //    mounted above this line logs without a trace key, which makes its
   //    failures the hardest to diagnose.
   app.use(requestId);
+
+  // 2b. SECURITY HEADERS -- early, so EVERY response carries them, including
+  //     404s and error responses produced below. Placed after requestId only
+  //     so a failure here is still traceable; it depends on nothing above.
+  app.use(securityHeaders);
 
   // 3. REQUEST LOGGER -- immediately after the id.
   //    Starts the timer here so the measured duration covers body parsing and
