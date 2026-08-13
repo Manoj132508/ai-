@@ -314,8 +314,16 @@ correct outcome returned as 200.
   `Content-Type` or the file extension.
 - **Secrets** never reach the client bundle. Tree-shaking removes code; it is
   not a hiding place.
-
-Rate limiting and security headers arrive in Phase 11.
+- **Security headers** on every response: `nosniff`, `X-Frame-Options: DENY`
+  and a `frame-ancestors 'none'` CSP (clickjacking), `no-referrer`,
+  `Cross-Origin-Resource-Policy: same-origin`, and HSTS in production. The
+  `X-Powered-By` framework fingerprint is removed.
+- **Rate limiting** in three IP-keyed tiers ([ADR 012](docs/adr/012-rate-limiting.md)):
+  a loose global backstop, a tight tier on login/register (brute force and
+  enumeration), and a per-minute tier on the expensive `ask` endpoint. Limits
+  are env-tunable; a 429 carries `RateLimit-*` and `Retry-After` headers. The
+  store is in-memory (single instance); the documented scale path is a shared
+  Redis store behind the same middleware.
 
 ## Testing
 

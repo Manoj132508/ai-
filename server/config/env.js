@@ -101,4 +101,25 @@ export const config = Object.freeze({
   // dev` from anywhere behaves the same.
   uploadDir: process.env.UPLOAD_DIR ?? 'uploads',
   maxUploadBytes: Number(process.env.MAX_UPLOAD_BYTES ?? 10 * 1024 * 1024),
+
+  // Rate-limit tiers (phase 11). Env-tunable so limits can be tightened in
+  // production without a code change, with defaults chosen per surface:
+  //   - global: a loose backstop against one IP hammering the whole API.
+  //   - auth:   tight, because login/register is the brute-force and
+  //             account-enumeration surface.
+  //   - ask:    per-minute, because each ask is an expensive LLM call.
+  rateLimits: {
+    global: {
+      windowMs: Number(process.env.RATE_LIMIT_GLOBAL_WINDOW_MS ?? 15 * 60 * 1000),
+      max: Number(process.env.RATE_LIMIT_GLOBAL_MAX ?? 300),
+    },
+    auth: {
+      windowMs: Number(process.env.RATE_LIMIT_AUTH_WINDOW_MS ?? 15 * 60 * 1000),
+      max: Number(process.env.RATE_LIMIT_AUTH_MAX ?? 10),
+    },
+    ask: {
+      windowMs: Number(process.env.RATE_LIMIT_ASK_WINDOW_MS ?? 60 * 1000),
+      max: Number(process.env.RATE_LIMIT_ASK_MAX ?? 15),
+    },
+  },
 });

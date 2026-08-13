@@ -6,6 +6,7 @@ import { config } from './config/env.js';
 import { requestId } from './middleware/requestId.js';
 import { requestLogger } from './middleware/requestLogger.js';
 import { securityHeaders } from './middleware/securityHeaders.js';
+import { createRateLimiter } from './middleware/rateLimit.js';
 import { notFound } from './middleware/notFound.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import routes from './routes/index.js';
@@ -73,6 +74,13 @@ export function createApp() {
       exposedHeaders: ['X-Request-Id'],
     }),
   );
+
+  // 4b. GLOBAL RATE LIMIT -- after CORS, before body parsing.
+  //     After CORS so a browser preflight (OPTIONS) is answered by cors()
+  //     without spending budget. Before body parsing so a flood from one IP is
+  //     refused BEFORE we buffer and parse its bodies. This is the loose
+  //     backstop; auth and ask get their own tighter limits at their routes.
+  app.use(createRateLimiter({ ...config.rateLimits.global, name: 'global' }));
 
   // 5. BODY PARSING -- after CORS, before routes.
   //    A handler cannot read req.body before this runs. The size limit is a
