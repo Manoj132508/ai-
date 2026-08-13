@@ -327,17 +327,24 @@ correct outcome returned as 200.
 
 ## Testing
 
-Not yet written — Phase 12. The plan, and the reason `app.js` builds the app
-without listening (so Supertest can drive the real middleware chain without
-binding a port):
+Three suites, all offline and dependency-light. `app.js` builds the app without
+listening precisely so the Node tests can drive the real middleware chain on an
+ephemeral port (`listen(0)`) without binding 4200.
 
-| Kind | Focus |
-|---|---|
-| Unit (pytest) | The chunker — boundaries, overlap, page attribution. Highest value in the project |
-| Unit (Vitest) | Password hashing, JWT lifecycle, magic-byte validation |
-| Integration (Supertest) | Auth flow; **tenancy isolation — user A must 404 on user B's knowledge base** |
-| API (pytest) | The internal contract, and rejection of a missing shared secret |
-| Flow | register → upload → wait for `indexed` → ask → citation resolves to the right page |
+| Suite | Run | Covers |
+|---|---|---|
+| **Node** (`node:test`, no framework) | `cd server && npm test` | Auth + session lifecycle; **tenancy isolation — user A gets 404 on user B's KB**; CSRF; KB/document CRUD; magic-byte upload validation; deletion + cascade; security headers; rate-limiter logic; the **upload→index handoff** via an injected fake AI client |
+| **Python** (`pytest`, `asyncio_mode=auto`) | `.venv\Scripts\python -m pytest` (repo root) | Chunker boundaries/overlap/page attribution; embeddings; retrieval threshold; both generation providers via `httpx.MockTransport`; the `/query` streaming + cancellation boundary; secret-free config |
+| **Client** (`vitest` + Testing Library + jsdom) | `cd client && npm test` | `apiClient` (CSRF, envelope, error mapping); `format` utils; the **`useAsk` SSE hook** (frame buffering, status machine, mid-stream error, abort); the `RequireAuth` three-state guard |
+
+Two Python tests skip by design (the live Anthropic call and the real-model
+load; `RUN_MODEL_TESTS=1` enables the latter). Injecting the AI client
+(`setAiClient`) is what lets the Node suite cover the fire-and-forget indexing
+seam that was previously skipped rather than faked.
+
+Not yet a single end-to-end flow (register → upload → `indexed` → ask →
+citation): that spans all three services and belongs to a later CI harness.
+Component coverage is the highest-value pieces, not every component.
 
 ## Challenges so far
 

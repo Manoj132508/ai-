@@ -95,3 +95,31 @@ export const aiClient = {
     return response;
   },
 };
+
+/**
+ * Injection seam for the fire-and-forget index handoff.
+ *
+ * The upload controller resolves its indexer through getAiClient() rather than
+ * importing `aiClient` directly, so a test can substitute a fake and assert the
+ * handoff actually runs -- the seam that used to be skipped wholesale under
+ * NODE_ENV=test (see the old comment in document.controller.js).
+ *
+ * The DEFAULT under test is `null`: no client, so an upload creates the row as
+ * 'processing' and makes no background HTTP call -- exactly the behaviour the
+ * existing upload suite relies on. A test that wants to exercise the handoff
+ * opts in with setAiClient(fake), and resetAiClient() restores the default.
+ * Outside test the default is the real client.
+ */
+let activeAiClient = config.isTest ? null : aiClient;
+
+export function getAiClient() {
+  return activeAiClient;
+}
+
+export function setAiClient(next) {
+  activeAiClient = next;
+}
+
+export function resetAiClient() {
+  activeAiClient = config.isTest ? null : aiClient;
+}

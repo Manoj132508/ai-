@@ -2,8 +2,7 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { ok, okPaginated, noContent } from '../utils/respond.js';
 import { findOwned } from '../utils/ownership.js';
 import { deleteStoredFile, resolveStoredPath } from '../services/fileStorage.js';
-import { aiClient } from '../services/aiClient.js';
-import { config } from '../config/env.js';
+import { aiClient, getAiClient } from '../services/aiClient.js';
 import { KnowledgeBase, Document, DOCUMENT_STATUSES } from '../models/index.js';
 
 /**
@@ -62,57 +61,54 @@ export const uploadDocument = asyncHandler(async (req, res) => {
   /*
    * Fire-and-forget indexing (ADR 007).
    *
-   * Skipped under NODE_ENV=test. Without the guard every upload test would
-   * make a real HTTP call to the AI service, so the suite would pass or fail
-   * depending on whether a separate Python process happens to be running --
-   * and the background write would land at an unpredictable moment, racing
-   * later assertions in the same file.
-   *
-   * The cost is honest and worth stating: the Node tests therefore do NOT
-   * cover the handoff itself. Phase 12 makes aiClient injectable so it can be
-   * faked rather than skipped, which is the real fix.
+   * The indexer is resolved through getAiClient() rather than imported
+   * directly, which is what makes the handoff testable: a test injects a fake
+   * and asserts the document moves to 'indexed' or 'failed'. The default under
+   * NODE_ENV=test is no client, so the existing upload suite still creates the
+   * row as 'processing' and makes no background HTTP call -- the old
+   * `config.isTest` skip, now expressed as "no injected client" so a test can
+   * opt in instead of being locked out.
    */
-  if (config.isTest) {
-    return ok(res, { document }, 202);
-  }
+  const indexer = getAiClient();
+  if (indexer) {
+    const absolutePath = resolveStoredPath(document.storedPath);
+    indexer
+      .indexDocument({
+        documentId: document._id,
+        knowledgeBaseId: kb._id,
+        filePath: absolutePath,
+        filename: document.originalName,
+        mimeType: document.mimeType,
+      })
+      .then(async (result) => {
+        await Document.updateOne(
+          { _id: document._id },
+          { status: 'indexed', chunkCount: result.chunk_count ?? 0 },
+        );
+        await refreshCounts(kb._id);
+        req.log.info('document indexed in background', { documentId: String(document._id) });
+      })
+      .catch(async (err) => {
+        /*
+         * errorMessage is USER-FACING -- it renders inline under the failed row.
+         * err.message here is the AI service's raw text, which carries status
+         * codes, internal URLs and stack fragments. Same rule as the Express
+         * error handler: the operator gets the detail in the log, the user gets
+         * something they can act on.
+         */
+        const isUnreadable = /422/.test(err.message);
+        const errorMessage = isUnreadable
+          ? 'No readable text could be extracted. This file may be a scanned image rather than a text PDF.'
+          : 'Indexing failed. You can retry this document.';
 
-  const absolutePath = resolveStoredPath(document.storedPath);
-  aiClient
-    .indexDocument({
-      documentId: document._id,
-      knowledgeBaseId: kb._id,
-      filePath: absolutePath,
-      filename: document.originalName,
-      mimeType: document.mimeType,
-    })
-    .then(async (result) => {
-      await Document.updateOne(
-        { _id: document._id },
-        { status: 'indexed', chunkCount: result.chunk_count ?? 0 },
-      );
-      await refreshCounts(kb._id);
-      req.log.info('document indexed in background', { documentId: String(document._id) });
-    })
-    .catch(async (err) => {
-      /*
-       * errorMessage is USER-FACING -- it renders inline under the failed row.
-       * err.message here is the AI service's raw text, which carries status
-       * codes, internal URLs and stack fragments. Same rule as the Express
-       * error handler: the operator gets the detail in the log, the user gets
-       * something they can act on.
-       */
-      const isUnreadable = /422/.test(err.message);
-      const errorMessage = isUnreadable
-        ? 'No readable text could be extracted. This file may be a scanned image rather than a text PDF.'
-        : 'Indexing failed. You can retry this document.';
+        await Document.updateOne({ _id: document._id }, { status: 'failed', errorMessage });
 
-      await Document.updateOne({ _id: document._id }, { status: 'failed', errorMessage });
-
-      req.log.error('background indexing failed', {
-        documentId: String(document._id),
-        detail: err.message,
+        req.log.error('background indexing failed', {
+          documentId: String(document._id),
+          detail: err.message,
+        });
       });
-    });
+  }
 
   return ok(res, { document }, 202);
 });
