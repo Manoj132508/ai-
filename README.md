@@ -11,6 +11,10 @@ this in your documents"* when the answer isn't there.
 > documentation, a case study, and interview prep. This file is kept honest
 > deliberately — see [Current state](#current-state).
 
+📖 **[Read the case study](docs/case-study.md)** — the problem, the key
+architectural decisions and their trade-offs, the hard problems solved, and the
+measured outcomes.
+
 ---
 
 ## Problem
