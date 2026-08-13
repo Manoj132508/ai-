@@ -26,7 +26,7 @@ from app.pipeline.prompt import REFUSAL_TEXT
 from app.pipeline.vector_store import ChromaVectorStore
 from chromadb.config import Settings as ChromaSettings
 
-from evaluation import metrics
+from evaluation import metrics, tuning
 from evaluation.harness import QuestionResult, index_corpus, run_generation, run_retrieval
 
 BASELINE_PATH = Path(__file__).parent / "baseline.json"
@@ -133,6 +133,47 @@ def print_report(results, tier_a, tier_b, settings) -> None:
     print("=" * 72 + "\n")
 
 
+def run_tuning(results: list[QuestionResult], settings) -> None:
+    """Select the threshold on the tuning split, then evaluate ONCE on holdout.
+
+    The tuning scores choose the threshold; the holdout scores are touched only
+    at the end, at that single chosen value, so the reported holdout numbers are
+    an honest estimate of how the threshold generalises to unseen questions."""
+    tune = [(r.q.answerable, r.top_score) for r in results if r.q.split == "tune"]
+    hold = [(r.q.answerable, r.top_score) for r in results if r.q.split == "holdout"]
+    candidates = tuning.default_candidates()
+    chosen, best_tune, _curve = tuning.select_threshold(tune, candidates)
+    old = settings.retrieval_score_threshold
+
+    def holdout_at(t: float) -> dict:
+        recs = [(a, tuning.grounded_at(s, t)) for a, s in hold]
+        m = metrics.summarize_refusal(recs)
+        m["balanced_accuracy"] = tuning.balanced_accuracy(recs)
+        return m
+
+    old_h, new_h = holdout_at(old), holdout_at(chosen)
+
+    print("\n" + "=" * 72)
+    print("  THRESHOLD TUNING")
+    print("=" * 72)
+    print(f"  tuning questions:  {len(tune)}   holdout questions: {len(hold)}")
+    print(f"  selected on TUNING: threshold={chosen:.3f}  (balanced acc {best_tune:.3f})")
+    print("\n  HELD-OUT VALIDATION (evaluated once, never used for selection)")
+    print(f"    {'metric':<22}{'@ 0.350 (old)':>16}{'@ ' + format(chosen, '.3f') + ' (new)':>16}")
+    for key, label in (
+        ("balanced_accuracy", "balanced_accuracy"),
+        ("accuracy", "accuracy"),
+        ("false_answer_rate", "false_answer_rate"),
+        ("over_refusal_rate", "over_refusal_rate"),
+    ):
+        print(f"    {label:<22}{old_h[key]:>16.3f}{new_h[key]:>16.3f}")
+    better = new_h["balanced_accuracy"] >= old_h["balanced_accuracy"]
+    verdict = "generalises (>= old on holdout)" if better else "does NOT beat old on holdout"
+    print(f"\n  verdict: threshold {chosen:.3f} {verdict}")
+    print("  (apply by setting RETRIEVAL_SCORE_THRESHOLD / the config default, then re-baseline)")
+    print("=" * 72 + "\n")
+
+
 def save_baseline(tier_a, settings) -> None:
     payload = {
         "embedding_model": settings.embedding_model,
@@ -167,6 +208,8 @@ def main() -> int:
     parser.add_argument("--generation", action="store_true", help="also run Tier B (live LLM)")
     parser.add_argument("--write-baseline", action="store_true", help="save Tier A as the baseline")
     parser.add_argument("--check", action="store_true", help="fail if Tier A regressed vs baseline")
+    parser.add_argument("--tune", action="store_true", help="select threshold on tune split, "
+                        "validate on holdout")
     args = parser.parse_args()
 
     settings = get_settings()
@@ -184,6 +227,11 @@ def main() -> int:
         print(f"  indexed {chunks} chunks from the corpus")
 
         results = run_retrieval(embedder, store, settings)
+
+        if args.tune:
+            run_tuning(results, settings)
+            return 0
+
         tier_a = tier_a_metrics(results)
 
         tier_b = None

@@ -20,3 +20,4 @@ by a new record rather than edited, so the reasoning at the time survives.
 | [012](012-rate-limiting.md) | In-memory fixed-window rate limiting, three tiers | 11 | Accepted |
 | [013](013-read-model-performance.md) | Read-model `.lean()` boundary and index-backed sorts | 13 | Accepted |
 | [014](014-deployment-topology.md) | Containerized deployment topology | 14 | Accepted |
+| [015](015-threshold-held-out-tuning.md) | Retrieval threshold kept at 0.35 after held-out tuning | post | Accepted |

@@ -315,10 +315,17 @@ baseline. It's split by determinism: a **Tier A** — retrieval hit-rate/MRR,
 refusal accuracy, and the false-answer rate — is deterministic given the fixed
 embedding model, so `--check` gates it in CI; a **Tier B** — citation validity,
 correct-source, answer-contains-fact — needs a live LLM and is reported but not
-gated. It already earned its keep: it showed the shipped 0.35 threshold
-over-refuses three answerable questions that score just under it. What's still
-missing is full LLM-judge faithfulness at scale and a larger labelled set —
-that's the next increment, but "detect when it gets worse" now exists.
+gated. It already earned its keep — and the *way* it did is the point. It flagged that
+the 0.35 threshold over-refuses some answerable questions. Instead of nudging the
+number until the harness looked better (overfitting), I expanded the set to 39
+questions, split it into a fixed tuning and held-out partition, selected the
+threshold on tuning, and evaluated **once** on the holdout. The selected value
+(0.38) **did not beat 0.35 on the holdout**, so I kept the default. The deeper
+finding: the answerable and on-topic-but-unanswerable score distributions
+overlap, so no single threshold separates them — that's the generation layer's
+job (and a re-ranker's), not a constant's ([ADR 015](adr/015-threshold-held-out-tuning.md)).
+What's still missing is full LLM-judge faithfulness at scale; that's the next
+increment.
 
 **What would you do differently if you started over?**
 Two things. I'd stand up the streaming path and *watch it stream* earlier, before
@@ -343,3 +350,4 @@ rather than surfacing them at the end.
 - **Context vs Redux?** — it's server state (a cache), not store state.
 - **Cancellation?** — abort → Express teardown → Python disconnect → model stops.
 - **Biggest bug?** — streaming-as-a-blob; a sync generator blocking the async loop.
+- **Why not just retune the threshold?** — held-out validation rejected it; the score distributions overlap, so no constant separates them.

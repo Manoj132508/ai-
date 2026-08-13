@@ -147,10 +147,15 @@ edge in production, an opt-in `NODE_ENV=development` for a local http trial.
   `Retry-After`), security headers on every response, `X-Powered-By` removed.
 - **The answers themselves are measured, not just the code.** An evaluation
   harness runs a labelled question set through the real pipeline and scores
-  retrieval (hit-rate 1.00, MRR 0.95), refusal accuracy, and — with a live LLM —
+  retrieval (hit-rate 1.00, MRR 0.90), refusal accuracy, and — with a live LLM —
   citation correctness, gating the deterministic metrics against a baseline so a
-  regression fails the build. It immediately paid for itself by surfacing that
-  the shipped retrieval threshold slightly over-refuses.
+  regression fails the build. When it flagged the retrieval threshold, I resisted
+  nudging the number: I split the set into tuning and held-out halves, selected
+  on tuning, and validated once on the holdout — where the "improved" threshold
+  **failed to generalise**. The honest outcome was to keep the default and
+  document that no single threshold separates on-topic-but-unanswerable questions
+  from real ones (that's the generation layer's job, and a re-ranker's) — proper
+  method preventing an overfit "fix" ([ADR 015](docs/adr/015-threshold-held-out-tuning.md)).
 
 ## Outcomes
 

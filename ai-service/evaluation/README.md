@@ -14,6 +14,7 @@ python -m evaluation.run                  # Tier A: retrieval + refusal
 python -m evaluation.run --generation     # + Tier B: citations + answer quality (needs a live LLM)
 python -m evaluation.run --write-baseline # save Tier A as the regression baseline
 python -m evaluation.run --check          # exit 1 if Tier A regressed vs baseline.json
+python -m evaluation.run --tune           # select threshold on the tune split, validate on holdout
 ```
 
 The first run downloads the embedding model (~90 MB). The corpus is indexed into
@@ -53,28 +54,37 @@ step on top of Tier B; the citation-validity and answer-correct checks here are
 the deterministic subset of that, chosen because they don't inherit the judge's
 nondeterminism.
 
-## What the baseline already revealed
+## What the harness revealed
 
-Retrieval is strong — `hit_rate 1.00`, `MRR 0.95`: the right document is
+Retrieval is strong — `hit_rate 1.00`, `MRR 0.90`: the right document is
 retrieved and usually ranked first, including on the *semantic* questions that
-share no words with the source (which is the whole case for embeddings over
-keyword search).
+share no words with the source (the whole case for embeddings over keyword
+search).
 
-The harness's first real finding is about the **threshold**. At the shipped
-`0.35`, three answerable questions scored just under it (`0.297`–`0.302`) and
-were **over-refused**, while one out-of-scope question scored high and **leaked**.
-That's the precision/recall trade of a single global threshold, made concrete.
-The baseline records this honestly rather than hiding it — and deliberately does
-**not** retune the threshold, because tuning it on 17 questions would be
-overfitting. The right follow-up is a larger labelled set and a threshold swept
-against it; the harness is what makes that measurable.
+The interesting finding is about the **threshold**, and `--tune` investigated it
+properly. The golden set was expanded to 39 questions and split into a fixed
+tuning (21) and held-out (18) partition. Selecting on tuning chose `0.38` — but
+on the **held-out** set it did **not** beat the shipped `0.35` (balanced accuracy
+0.625 vs 0.667), so the change was rejected rather than shipped. That is the
+held-out split doing its job: the single-set finding was noise.
+
+The deeper result is that **no single threshold can fix this.** The score
+distributions overlap: seven genuinely answerable questions score *below* 0.35
+(down to 0.234), while several unanswerable-but-topically-related questions score
+*above* it (`adv-price` 0.575, `un-founded` 0.432 — "Acme Corp" is all over the
+corpus). Raising the threshold trades over-refusals for false-answers one for
+one. So the threshold stays a cheap **pre-filter** (it cleanly rejects scores
+below ~0.2), the overlap is the **generation layer's** job (the grounded-refusal
+prompt), and the real next step is a **re-ranker**, not a better constant. This
+is recorded in [ADR 015](../../docs/adr/015-threshold-held-out-tuning.md).
 
 ## Adding to the set
 
 Edit `dataset.py`. Each question needs: the text, whether it's `answerable`, its
-`kind` (for grouping), the `expected_doc`, and — for Tier B — the `must_contain`
-substrings a correct answer must include. Keep the corpus (`corpus/*.md`)
-small and the labels trustworthy; a golden set is only as good as its labels.
+`kind` (for grouping), its `split` (`tune` / `holdout`), the `expected_doc`, and
+— for Tier B — the `must_contain` substrings a correct answer must include. Keep
+the split fixed and stratified, the corpus (`corpus/*.md`) small, and the labels
+trustworthy; a golden set is only as good as its labels.
 
 ## Note on this machine
 
