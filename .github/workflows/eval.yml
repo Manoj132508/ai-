@@ -1,0 +1,29 @@
+name: RAG eval
+
+# The retrieval/refusal regression gate. Kept OUT of the per-PR ci.yml on
+# purpose: it installs torch and downloads the embedding model, which is minutes
+# of setup that most PRs don't need. It runs weekly and on demand instead, and
+# fails if Tier A regressed against the committed baseline.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * 1" # Mondays 06:00 UTC
+
+jobs:
+  eval:
+    name: retrieval & refusal vs baseline
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: ai-service/requirements-dev.txt
+      - run: pip install -r ai-service/requirements-dev.txt
+      # Tier A only (deterministic). --check exits non-zero on regression vs
+      # ai-service/evaluation/baseline.json. Generation (Tier B) is not run in
+      # CI: it needs a live LLM and is nondeterministic.
+      - name: Run eval regression check
+        working-directory: ai-service
+        run: python -m evaluation.run --check

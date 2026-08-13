@@ -381,6 +381,18 @@ Not yet a single end-to-end flow (register → upload → `indexed` → ask →
 citation): that spans all three services and belongs to a later CI harness.
 Component coverage is the highest-value pieces, not every component.
 
+### RAG evaluation harness
+
+Tests prove the code runs; they don't prove the *answers* are good. A separate
+[evaluation harness](ai-service/evaluation/) (`python -m evaluation.run`) runs a
+fixed, labelled question set through the real pipeline and scores **retrieval
+quality** (hit-rate, MRR), **refusal accuracy** (including the false-answer rate
+— the hallucination signal), and, with a live LLM, **citation correctness** and
+answer quality. `--check` gates the deterministic metrics against a committed
+`baseline.json`, so a regression is a failed build, not a surprise in
+production. It already flagged a real finding: the shipped `0.35` threshold
+over-refuses a few answerable questions that score just under it.
+
 ## Challenges so far
 
 **The 256-token embedding ceiling.** MiniLM silently truncates longer input —

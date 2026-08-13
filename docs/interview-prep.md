@@ -220,7 +220,8 @@ change the one thing, prove it" beats "add caching everywhere."
 
 **What's your testing strategy?**
 Three suites, all offline: Node (`node:test`) for the API, Vitest + Testing
-Library for the client, pytest for the Python pipeline — 173 tests total. I
+Library for the client, pytest for the Python pipeline — 181 tests total, plus a
+separate RAG evaluation harness that scores answer quality (see §8). I
 optimise for tests that encode a real invariant, not coverage percentage. The two
 I'd point to: the **cross-tenant isolation** test (user A must get a 404 on user
 B's knowledge base — a security guarantee), and the **`useAsk` SSE hook** tests
@@ -308,18 +309,24 @@ retrieved text as data with instruction-hierarchy techniques, and output
 validation. I'd rather say that clearly than pretend a prompt line fixed it.
 
 **How do you know the answers are actually good?**
-Right now: manual verification plus the grounding guarantee (every answer cites a
-page you can check). What's missing is an automated eval — a RAGAS-style harness
-scoring faithfulness and answer-relevance against a labelled set. That's the
-honest gap, and it's the thing I'd build next if this were going to production
-with real users.
+There's an evaluation harness (`ai-service/evaluation/`) that runs a fixed,
+labelled question set through the real pipeline and scores it against a saved
+baseline. It's split by determinism: a **Tier A** — retrieval hit-rate/MRR,
+refusal accuracy, and the false-answer rate — is deterministic given the fixed
+embedding model, so `--check` gates it in CI; a **Tier B** — citation validity,
+correct-source, answer-contains-fact — needs a live LLM and is reported but not
+gated. It already earned its keep: it showed the shipped 0.35 threshold
+over-refuses three answerable questions that score just under it. What's still
+missing is full LLM-judge faithfulness at scale and a larger labelled set —
+that's the next increment, but "detect when it gets worse" now exists.
 
 **What would you do differently if you started over?**
 Two things. I'd stand up the streaming path and *watch it stream* earlier, before
 building around it — the blob bug lived longer than it should have because tests
-looked green. And I'd add the eval harness from the start, because "is the answer
-good?" is the one question the test suite can't answer and the one users care
-about most.
+looked green. And I'd build the eval harness *first*, not last: "is the answer
+good?" is the one question the unit tests can't answer, and having the baseline
+from day one would have caught threshold and retrieval regressions as I went
+rather than surfacing them at the end.
 
 ---
 

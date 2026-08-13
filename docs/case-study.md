@@ -128,14 +128,15 @@ edge in production, an opt-in `NODE_ENV=development` for a local http trial.
 
 ## Quality: measured, not assumed
 
-- **Three test suites, 173 tests.** Node (47) covers auth, **cross-tenant
+- **Three test suites, 181 tests.** Node (47) covers auth, **cross-tenant
   isolation** (user A must 404 on user B's knowledge base), CSRF, upload
   magic-byte validation, and the upload→index handoff via an **injected fake AI
   client** — a seam that was previously skipped rather than faked. Client (26,
   Vitest) covers the API client and the tricky `useAsk` SSE hook (frame
   buffering across network-chunk splits, the status machine, mid-stream error,
-  abort). Python (100) covers chunking, retrieval threshold, both generation
-  providers via `httpx.MockTransport`, and streaming/cancellation — all offline.
+  abort). Python (108) covers chunking, retrieval threshold, both generation
+  providers via `httpx.MockTransport`, streaming/cancellation, and the eval
+  metric maths — all offline.
 - **Performance was measured before it was optimised.** Profiling the build
   found a single 199 KB JS bundle. Route-based code-splitting plus a stable
   vendor chunk cut the initial app shell to **10.8 KB** and deferred the
@@ -144,6 +145,12 @@ edge in production, an opt-in `NODE_ENV=development` for a local http trial.
 - **Security hardening** with verification: rate limiting in three IP-keyed
   tiers (the login tier proven to allow exactly 10 attempts, then 429 with
   `Retry-After`), security headers on every response, `X-Powered-By` removed.
+- **The answers themselves are measured, not just the code.** An evaluation
+  harness runs a labelled question set through the real pipeline and scores
+  retrieval (hit-rate 1.00, MRR 0.95), refusal accuracy, and — with a live LLM —
+  citation correctness, gating the deterministic metrics against a baseline so a
+  regression fails the build. It immediately paid for itself by surfacing that
+  the shipped retrieval threshold slightly over-refuses.
 
 ## Outcomes
 
