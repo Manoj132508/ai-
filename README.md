@@ -4,11 +4,12 @@ Ask natural-language questions of your own documents and get answers grounded
 in them — with a citation to the exact page, and an honest *"I couldn't find
 this in your documents"* when the answer isn't there.
 
-> **Status: phases 6 of 17 complete.** The React foundation and the Express API
-> contract are built and verified. The database, authentication and the RAG
-> pipeline are not yet implemented. Sections below marked _pending_ describe
-> the design, not working code. This file is kept honest deliberately — see
-> [Current state](#current-state).
+> **Status: phases 1–14 of 17 complete.** The full stack works end to end —
+> auth, tenancy, uploads, indexing, retrieval, and grounded streaming answers
+> with citations — and runs **with no API key** on a free local model (Ollama).
+> Three test suites pass; the system is containerized with CI. Remaining work is
+> documentation, a case study, and interview prep. This file is kept honest
+> deliberately — see [Current state](#current-state).
 
 ---
 
@@ -78,7 +79,8 @@ is in [`docs/adr/`](docs/adr/README.md).
 | Vector store | ChromaDB (local, persistent) |
 | Application data | MongoDB (Atlas in production) |
 | LLM | **Ollama** (local, free, default) or **Claude** (hosted, paid), behind one provider interface ([ADR 011](docs/adr/011-provider-neutral-generation.md)) |
-| Tests | node:test + Supertest (Node), pytest (Python) |
+| Tests | node:test (Node), Vitest + Testing Library (client), pytest (Python) |
+| Deploy | Docker + docker-compose, GitHub Actions CI |
 
 State is managed with React Context and hooks. Redux is deliberately absent —
 almost all state here is server state, and a cache-shaped problem is not a
@@ -88,33 +90,52 @@ store-shaped problem.
 
 | Phase | | Status |
 |---|---|---|
-| 1 | Requirements and user stories | Complete |
-| 2 | System architecture | Complete |
-| 3 | Database design | Complete |
-| 4 | UI/UX design | Complete |
-| 5 | Frontend foundation | Complete, browser-verified |
-| 6 | Backend API contract | Complete, verified |
-| 7–17 | Database, auth, features, RAG, security, tests, deploy | Not started |
+| 1–2 | Requirements · system architecture | Complete |
+| 3–4 | Database design · UI/UX design | Complete |
+| 5–6 | Frontend foundation · backend API contract | Complete, verified |
+| 7 | Database integration (Mongoose, ESR indexes, seeds) | Complete |
+| 8 | Authentication (JWT cookie, CSRF, tenancy) | Complete |
+| 9 | Documents (upload, magic-byte validation, indexing) | Complete |
+| 10 | RAG pipeline (retrieve → grounded streaming answer) | Complete, live-verified |
+| 11 | Security hardening (headers, rate limiting) | Complete |
+| 12 | Automated testing (Node · client · Python) | Complete |
+| 13 | Performance (code-splitting, read-model) | Complete |
+| 14 | Deployment (Docker, compose, CI) | Complete |
+| 15–17 | README · case study · interview prep | In progress |
 
-**Working today:** the React shell (routing, layouts, responsive drawer, design
-tokens, state primitives) and the Express API contract (`/api/health`, the
-response envelope, the error taxonomy, request tracing, graceful shutdown).
+**Working today — the whole product.** Register and log in, create a knowledge
+base, upload a PDF/TXT/Markdown file, watch it index, then ask a question and
+get a streamed answer grounded in your document with a citation to the exact
+page — or an honest *"I couldn't find this in your documents"*. All of it runs
+locally with no API key on a free Ollama model.
 
-**Not working yet:** every feature. No database, no login, no uploads, no
-answers.
+**Not built (by design):** team sharing, OCR for scanned PDFs, and the other
+items under [Future improvements](#future-improvements).
 
 ## Installation
 
-Requires Node 20+, Python 3.12 and (from Phase 7) MongoDB.
+**Everything in containers** — the fastest way to run the whole system:
 
 ```bash
-# API
+cp .env.compose.example .env    # fill in JWT_SECRET and INTERNAL_API_KEY
+docker compose up --build       # SPA on http://localhost:8080
+```
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for the details (including the
+secure-cookie/HTTPS note). The rest of this section is the **local dev** setup,
+service by service.
+
+Requires Node 20+, Python 3.12, MongoDB (running locally), and — for free local
+answers — [Ollama](#ollama--free-local-the-default).
+
+```bash
+# API  (terminal 1)
 cd server
 cp .env.example .env
 npm install
 npm run dev            # http://localhost:4200
 
-# Web client, in a second terminal
+# Web client  (terminal 2)
 cd client
 npm install
 npm run dev            # http://localhost:5177
@@ -127,9 +148,11 @@ temptation to "fix" a cookie problem by moving the token into `localStorage`
 ([ADR 003](docs/adr/003-jwt-in-httponly-cookie.md)).
 
 ```bash
-# AI service
-python -m venv .venv && .\.venv\Scripts\Activate.ps1
-pip install -r requirements-dev.txt
+# AI service  (terminal 3)
+python -m venv .venv && .\.venv\Scripts\Activate.ps1     # PowerShell
+cp .env.example .env                                     # repo-root .env
+pip install -r ai-service/requirements-dev.txt
+uvicorn app.main:app --app-dir ai-service --port 8000
 ```
 
 ## Generation provider (Ollama or Anthropic)
@@ -263,15 +286,22 @@ Every response — success or failure — has the same shape:
 Clients switch on `error.code`, never on `error.message`: codes are the
 contract, messages are prose ([ADR 009](docs/adr/009-response-envelope.md)).
 
-**Implemented**
-
 | Method | Path | |
 |---|---|---|
+| `POST` | `/api/auth/register` · `/login` · `/logout` | Session cookie + CSRF token; strict rate limit |
+| `GET` | `/api/auth/me` | Current user, or 401 |
+| `GET` `POST` | `/api/knowledge-bases` | List / create (per-tenant unique name) |
+| `GET` `PATCH` `DELETE` | `/api/knowledge-bases/:id` | Read / update / cascade delete |
+| `GET` `POST` | `/api/knowledge-bases/:id/documents` | List / upload (magic-byte validated) |
+| `POST` | `/api/knowledge-bases/:id/ask` | **Ask — SSE stream** of tokens then citations |
+| `GET` | `/api/knowledge-bases/:id/conversations` | Conversation history |
+| `GET` | `/api/documents/:id` | Document status (polled while `processing`) |
+| `GET` `DELETE` | `/api/conversations/:id` · `/:id/messages` | Messages / delete conversation |
 | `GET` | `/api/health` | Liveness plus a per-dependency `checks` map |
 | `GET` | `/api/dev/*` | Deliberate-failure routes; absent in production |
 
-**Planned** — auth, knowledge bases, documents, search, ask (SSE), conversations.
-Full table in [`docs/`](docs/).
+Every authenticated route is tenancy-scoped and CSRF-protected at its mount
+point, so a new route cannot accidentally ship public ([Security](#security)).
 
 ### Error taxonomy
 

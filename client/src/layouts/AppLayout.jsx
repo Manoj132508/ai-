@@ -112,7 +112,7 @@ export default function AppLayout() {
           </NavLink>
 
           <p className={styles.sidebarNote}>
-            The knowledge base list arrives in Phase 9.
+            Open a knowledge base to ask questions of its documents.
           </p>
         </nav>
 

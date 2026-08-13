@@ -17,3 +17,6 @@ by a new record rather than edited, so the reasoning at the time survives.
 | [009](009-response-envelope.md) | One response envelope and a closed error taxonomy | 6 | Accepted |
 | [010](010-csrf-double-submit.md) | Double-submit cookie for CSRF | 8 | Accepted |
 | [011](011-provider-neutral-generation.md) | Provider-neutral generation, Ollama by default | 10 | Accepted |
+| [012](012-rate-limiting.md) | In-memory fixed-window rate limiting, three tiers | 11 | Accepted |
+| [013](013-read-model-performance.md) | Read-model `.lean()` boundary and index-backed sorts | 13 | Accepted |
+| [014](014-deployment-topology.md) | Containerized deployment topology | 14 | Accepted |
