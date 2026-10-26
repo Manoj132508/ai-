@@ -1,5 +1,13 @@
 # AI Knowledge Assistant
 
+[![CI](https://github.com/Manoj132508/ai-/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Manoj132508/ai-/actions/workflows/ci.yml?query=branch%3Amain)
+[![RAG eval](https://github.com/Manoj132508/ai-/actions/workflows/eval.yml/badge.svg?branch=main)](https://github.com/Manoj132508/ai-/actions/workflows/eval.yml?query=branch%3Amain)
+
+The CI badge tracks the Node API, Vitest frontend and offline Python test jobs.
+The separate RAG evaluation workflow runs weekly or on demand; its status is
+shown independently because it downloads the embedding model and exercises the
+retrieval/refusal regression gate.
+
 Ask natural-language questions of your own documents and get answers grounded
 in them — with a citation to the exact page, and an honest *"I couldn't find
 this in your documents"* when the answer isn't there.
